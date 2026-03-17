@@ -1,0 +1,21 @@
+{
+  "city": "ahmedabad",
+  "base_url": "https://housing.com/in/buy/ahmedabad/house-ahmedabad",
+  "n_search_pages_fetched": 10,
+  "search_inventory_totals": [
+    1562,
+    1541,
+    1557,
+    1557,
+    1557,
+    1563,
+    1566,
+    1548,
+    1560,
+    1562
+  ],
+  "n_detail_urls_deduplicated": 1,
+  "n_rows_written_this_run": 1,
+  "parsed_csv": "parsed_listings.csv",
+  "parsed_jsonl": "parsed_listings.jsonl"
+}

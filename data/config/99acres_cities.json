@@ -1,0 +1,78 @@
+{
+  "gurgaon": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-gurgaon-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-gurgaon-ffid"
+  },
+  "gurugram": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-gurgaon-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-gurgaon-ffid"
+  },
+  "bangalore": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-bangalore-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-bangalore-ffid"
+  },
+  "bengaluru": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-bangalore-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-bangalore-ffid"
+  },
+  "chennai": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-chennai-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-chennai-ffid"
+  },
+  "hyderabad": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-hyderabad-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-hyderabad-ffid"
+  },
+  "pune": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-pune-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-pune-ffid"
+  },
+  "mumbai": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-mumbai-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-mumbai-ffid"
+  },
+  "delhi": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-new-delhi-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-new-delhi-ffid"
+  },
+  "noida": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-noida-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-noida-ffid"
+  },
+  "kolkata": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-kolkata-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-kolkata-ffid"
+  },
+  "ahmedabad": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-ahmedabad-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-ahmedabad-ffid"
+  },
+  "jaipur": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-jaipur-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-jaipur-ffid"
+  },
+  "lucknow": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-lucknow-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-lucknow-ffid"
+  },
+  "greater-noida": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-greater-noida-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-greater-noida-ffid"
+  },
+  "faridabad": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-faridabad-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-faridabad-ffid"
+  },
+  "ghaziabad": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-ghaziabad-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-ghaziabad-ffid"
+  },
+  "thane": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-thane-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-thane-ffid"
+  },
+  "navi-mumbai": {
+    "house": "https://www.99acres.com/independent-house-for-sale-in-navi-mumbai-ffid",
+    "flat": "https://www.99acres.com/flats-for-sale-in-navi-mumbai-ffid"
+  }
+}

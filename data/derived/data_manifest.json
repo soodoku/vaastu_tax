@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-03-16T19:23:39.909108",
+  "statistics": {
+    "total_listings": 46271,
+    "vaastu_mentioned_count": 4244,
+    "vaastu_mention_rate": 9.172051608999157,
+    "by_source": {
+      "campusx": {
+        "count": 7764,
+        "vaastu_count": 2104,
+        "vaastu_rate": 27.1
+      },
+      "kaggle_arvanshul": {
+        "count": 38502,
+        "vaastu_count": 2135,
+        "vaastu_rate": 5.55
+      },
+      "our_scraper": {
+        "count": 5,
+        "vaastu_count": 5,
+        "vaastu_rate": 100.0
+      }
+    },
+    "by_city": {
+      "gurgaon": {
+        "count": 18473,
+        "vaastu_count": 2591,
+        "vaastu_rate": 14.03
+      },
+      "hyderabad": {
+        "count": 9487,
+        "vaastu_count": 666,
+        "vaastu_rate": 7.02
+      },
+      "kolkata": {
+        "count": 8797,
+        "vaastu_count": 374,
+        "vaastu_rate": 4.25
+      },
+      "mumbai": {
+        "count": 9514,
+        "vaastu_count": 613,
+        "vaastu_rate": 6.44
+      }
+    },
+    "by_property_type": {
+      "farm house": {
+        "count": 40,
+        "vaastu_count": 1,
+        "vaastu_rate": 2.5
+      },
+      "flat": {
+        "count": 5940,
+        "vaastu_count": 1702,
+        "vaastu_rate": 28.65
+      },
+      "house": {
+        "count": 1829,
+        "vaastu_count": 407,
+        "vaastu_rate": 22.25
+      },
+      "independent house/villa": {
+        "count": 2951,
+        "vaastu_count": 127,
+        "vaastu_rate": 4.3
+      },
+      "independent/builder floor": {
+        "count": 3187,
+        "vaastu_count": 212,
+        "vaastu_rate": 6.65
+      },
+      "other": {
+        "count": 2,
+        "vaastu_count": 0,
+        "vaastu_rate": 0.0
+      },
+      "residential apartment": {
+        "count": 28550,
+        "vaastu_count": 1367,
+        "vaastu_rate": 4.79
+      },
+      "residential land": {
+        "count": 3529,
+        "vaastu_count": 424,
+        "vaastu_rate": 12.01
+      },
+      "serviced apartments": {
+        "count": 80,
+        "vaastu_count": 1,
+        "vaastu_rate": 1.25
+      },
+      "studio apartment": {
+        "count": 163,
+        "vaastu_count": 3,
+        "vaastu_rate": 1.84
+      }
+    },
+    "field_coverage": {
+      "price_crore": {
+        "non_null": 37436,
+        "coverage_pct": 80.91
+      },
+      "builtup_area_sqft": {
+        "non_null": 19841,
+        "coverage_pct": 42.88
+      },
+      "bhk": {
+        "non_null": 42716,
+        "coverage_pct": 92.32
+      },
+      "bathrooms": {
+        "non_null": 18473,
+        "coverage_pct": 39.92
+      }
+    }
+  },
+  "output_file": "data/derived/all_99acres_vaastu.csv",
+  "columns": [
+    "property_id",
+    "source",
+    "city",
+    "property_type",
+    "locality",
+    "sector",
+    "price_crore",
+    "price_per_sqft",
+    "builtup_area_sqft",
+    "carpet_area_sqft",
+    "bhk",
+    "bathrooms",
+    "balconies",
+    "furnishing",
+    "facing",
+    "floor_number",
+    "total_floors",
+    "property_age",
+    "vaastu_mentioned",
+    "vaastu_mentions_text",
+    "description",
+    "features",
+    "amenities"
+  ]
+}

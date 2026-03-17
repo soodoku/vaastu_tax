@@ -1,0 +1,21 @@
+{
+  "city": "hyderabad",
+  "base_url": "https://housing.com/in/buy/hyderabad/house-hyderabad",
+  "n_search_pages_fetched": 10,
+  "search_inventory_totals": [
+    2195,
+    2218,
+    2217,
+    2200,
+    2221,
+    2216,
+    2218,
+    2209,
+    2209,
+    2195
+  ],
+  "n_detail_urls_deduplicated": 281,
+  "n_rows_written_this_run": 281,
+  "parsed_csv": "parsed_listings.csv",
+  "parsed_jsonl": "parsed_listings.jsonl"
+}

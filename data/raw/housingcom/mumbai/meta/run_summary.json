@@ -1,0 +1,21 @@
+{
+  "city": "mumbai",
+  "base_url": "https://housing.com/in/buy/mumbai/house-mumbai",
+  "n_search_pages_fetched": 10,
+  "search_inventory_totals": [
+    374,
+    376,
+    374,
+    374,
+    374,
+    374,
+    374,
+    374,
+    374,
+    374
+  ],
+  "n_detail_urls_deduplicated": 271,
+  "n_rows_written_this_run": 271,
+  "parsed_csv": "parsed_listings.csv",
+  "parsed_jsonl": "parsed_listings.jsonl"
+}

@@ -1,0 +1,41 @@
+{
+  "downloads": [
+    {
+      "author": "arvanshul",
+      "valid": true,
+      "reason": "Has text fields with Vaastu mentions",
+      "files": [
+        {"file": "hyderabad.csv", "rows": 73858, "text_fields": ["DESCRIPTION", "FEATURES", "AMENITIES", "PROP_HEADING"]},
+        {"file": "kolkata.csv", "rows": 32721, "text_fields": ["DESCRIPTION", "FEATURES", "AMENITIES", "PROP_HEADING"]},
+        {"file": "mumbai.csv", "rows": 30852, "text_fields": ["DESCRIPTION", "FEATURES", "AMENITIES", "PROP_HEADING"]},
+        {"file": "gurgaon_10k.csv", "rows": 44889, "text_fields": ["DESCRIPTION", "FEATURES", "AMENITIES", "PROP_HEADING"]}
+      ],
+      "text_fields": ["DESCRIPTION", "FEATURES", "AMENITIES", "PROP_HEADING"],
+      "total_rows": 182320,
+      "notes": "Multi-city dataset from 99acres scraper project"
+    },
+    {
+      "author": "arnabk123",
+      "valid": false,
+      "reason": "Duplicate of campusx dataset (100% address overlap)",
+      "removed": true
+    },
+    {
+      "author": "shubhammkumaar",
+      "valid": false,
+      "reason": "No text fields for Vaastu extraction",
+      "removed": true
+    },
+    {
+      "author": "aniket7089",
+      "valid": false,
+      "reason": "No Vaastu mentions found in text fields",
+      "removed": true
+    }
+  ],
+  "summary": {
+    "valid_datasets": 1,
+    "total_rows": 182320,
+    "cities": ["gurgaon", "hyderabad", "kolkata", "mumbai"]
+  }
+}

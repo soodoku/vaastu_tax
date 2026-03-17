@@ -1,0 +1,13 @@
+{
+  "city": "gurgaon",
+  "property_types": [
+    "house"
+  ],
+  "n_search_pages_fetched": 2,
+  "detail_urls_by_type": {
+    "house": 5
+  },
+  "n_rows_written_this_run": 5,
+  "parsed_csv": "parsed_listings.csv",
+  "parsed_jsonl": "parsed_listings.jsonl"
+}

@@ -1,0 +1,133 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue}
+\setstretch{1.08}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+\input{../tex/results_macros.tex}
+
+\title{Valuing Vaastu:\\A Hedonic Prototype Using Public Housing Listings from Gurugram}
+\author{Gaurav Sood}
+\date{March 15, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note builds a prototype revealed-preference estimate of willingness to pay (WTP) for Vaastu in residential real estate. The empirical setting is a public Gurugram housing-listings dataset merged across flats and independent houses. Vaastu is coded from listing text and feature fields. In the preferred hedonic specification with sector fixed effects, the average capitalization of Vaastu is \PreferredAveragePremiumPct\ (95\% CI: [\PreferredAverageCILowPct, \PreferredAverageCIHighPct]). The average effect hides strong heterogeneity: for flats the estimate is essentially zero, while for independent houses the premium is \HousePremiumPct\ (95\% CI: [\HouseCILowPct, \HouseCIHighPct]), which translates into roughly \MedianHouseWTPLakh\ lakh at the sample median house price of \MedianHousePriceCr\ crore. A nearest-neighbor matching robustness check yields a premium of \MatchingPremiumPct. The prototype is useful for design work, but it does not yet identify welfare losses cleanly because the outcome is list price, not transaction price, and because a hedonic first stage alone mostly identifies capitalization rather than full welfare. The package therefore pairs a reproducible Gurugram analysis with a multi-city collection script meant to scale the data build.
+\end{abstract}
+
+\section{Introduction}
+
+There is a decent literature on superstition and housing, but most of it is about feng shui and Chinese or Chinese-diaspora contexts rather than Vaastu in India. The canonical hedonic framework is \cite{rosen1974}. Within the superstition-and-housing literature, the better-known papers examine lucky house numbers in Auckland \cite{bourassa_peng1999}, feng shui in Taiwan \cite{lin_chen_twu2012}, lucky apartments in Chinese transaction data \cite{shum_sun_ye2014}, and superstition in the Vancouver housing market \cite{fortin_hill_huang2014}. A related design attribute is orientation: south-facing units in Shanghai command a sizable premium in a setting where orientation can reflect both sunlight and feng shui beliefs \cite{lu2018}.
+
+The Vaastu question is similar in spirit but not identical in content. Vaastu can matter through beliefs about auspicious layout, entrances, room placement, plot shape, and directional alignment. In principle, those beliefs should capitalize into housing prices if buyers care and if sellers can credibly market compliance. The problem is that clean, mainstream-economics evidence on Vaastu is thin. This note treats the issue as a revealed-preference measurement problem: can public listing data support a credible first-pass estimate of Vaastu WTP, and what exactly would that estimate mean?
+
+Two findings stand out. First, the average Vaastu premium in Gurugram listings is modest once structural controls and sector fixed effects are included. Second, the interesting action is not in flats but in independent houses, where Vaastu plausibly interacts more strongly with the built form. The empirical nuisance is equally clear: the house sample is not tiny in aggregate, but the within-sector support needed for clean comparisons is much thinner than the headline count suggests.
+
+\section{Related literature}
+
+The paper sits in the hedonic-pricing tradition of \cite{rosen1974}. In that framework, the observed price of a house bundles the shadow values of structural, neighborhood, and amenity attributes. If Vaastu is a valued attribute, then---under the usual caveats about equilibrium sorting and omitted attributes---it can show up as a price premium in a first-stage hedonic regression.
+
+The superstition literature gives the closest precedents. \cite{bourassa_peng1999} study house numbers in Auckland. \cite{lin_chen_twu2012} estimate the impact of feng shui on Taiwanese housing prices using quantile regression. \cite{shum_sun_ye2014} use transaction-level data to study lucky apartments. \cite{fortin_hill_huang2014} document a premium for houses with an 8 in the street address in Vancouver neighborhoods with larger Chinese immigrant communities. \cite{lu2018} show that south-facing orientation in Shanghai commands a premium; the mechanism is not purely cultural, because sunlight matters too, but the paper is still a useful reminder that directional design attributes can carry large price effects.
+
+What this literature does \emph{not} provide is a direct Vaastu estimate in India with a transparent replication path. That gap is what the present package tries to narrow, cautiously and without pretending that a public-listings prototype is already a definitive welfare paper.
+
+\section{Data}
+
+The replication uses a public GitHub repository containing cleaned Gurugram listing files for flats, houses, and a merged property dataset \cite{campusx_dsmp_capstone}. The analysis pipeline starts from the raw house and flat files and merges them with the cleaned property dataset to recover neighborhood identifiers and additional housing attributes. The resulting estimation sample contains \TotalListings\ listings, of which \TotalVaastuListings\ (\TotalVaastuSharePct) are Vaastu-tagged.
+
+Vaastu is coded as an indicator for whether the listing's feature field or free-text description mentions \emph{Vaastu} or \emph{Vastu}. This is intentionally conservative and transparent. It is also noisy: absence of a Vaastu mention does not prove non-compliance, and the decision to advertise Vaastu may itself be strategic. That means the indicator should be interpreted as a marketed-Vaastu attribute, not as a structural engineering audit of the underlying house.
+
+The dataset contains both flats and independent houses. That distinction matters. Flats can mention Vaastu, but apartment-unit layouts are more constrained than standalone houses, so the scope for Vaastu-specific design may be weaker. Table~\ref{tab:counts} reports the sample composition. Flats account for \FlatListings\ listings, with \FlatVaastuListings\ Vaastu-tagged observations (\FlatVaastuSharePct). Houses account for \HouseListings\ listings, with \HouseVaastuListings\ Vaastu-tagged observations (\HouseVaastuSharePct).
+
+\input{../tex/tab_counts_by_type.tex}
+
+\section{Empirical design}
+
+The main estimating equation is a standard log-price hedonic specification:
+\begin{equation}
+\log(P_i) = \beta V_i + X_i'\gamma + \delta_s + \varepsilon_i,
+\end{equation}
+where $P_i$ is the list price of listing $i$, $V_i$ is the Vaastu indicator, $X_i$ contains structural and quality controls, and $\delta_s$ denotes sector fixed effects.
+
+The baseline controls include log area, bedrooms, bathrooms, balconies, floor, age/possession status, facing, furnishing, additional-room indicators, and a luxury-score control when available. The preferred specification uses sector fixed effects so that identification comes from within-sector comparisons rather than from raw cross-neighborhood differences.
+
+I also estimate a flexible specification that lets the Vaastu effect and the full set of controls differ by property type. This is important because a pooled average can hide a world in which flats have no Vaastu premium while independent houses do. Finally, I report a nearest-neighbor matching robustness check that compares Vaastu-tagged listings to observationally similar non-Vaastu listings within the same sector and property type.
+
+This design identifies a capitalization effect under strong assumptions. The usual gremlins remain alive and chewing on the wiring: omitted design attributes, selective marketing of Vaastu, and the fact that list prices are not transaction prices. The results should therefore be read as a disciplined prototype rather than as the last word.
+
+\section{Results}
+
+\subsection{Average effects}
+
+Table~\ref{tab:average-models} shows the standard hedonic progression. The raw difference is huge, which is exactly what one would expect if Vaastu is correlated with unobserved location and quality. Adding structural and quality controls cuts the estimate sharply. In the preferred specification with sector fixed effects, the average Vaastu premium is \PreferredAveragePremiumPct\ with a 95\% confidence interval from \PreferredAverageCILowPct\ to \PreferredAverageCIHighPct. That average effect is not estimated precisely enough to rule out a near-zero premium.
+
+\input{../tex/tab_average_models.tex}
+
+Figure~\ref{fig:coefs} summarizes the coefficient path. The comedy of omitted variables is visible to the naked eye: the raw estimate is large, then collapses as the controls stop free-riding on location and quality.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.92\linewidth]{../figs/vaastu_coefficients.png}
+    \caption{Coefficient path for the Vaastu indicator across specifications.}
+    \label{fig:coefs}
+\end{figure}
+
+\subsection{Heterogeneity by property type}
+
+The pooled average is not the economically interesting result. The flexible model shows that flats have essentially no residual Vaastu premium after controls, while independent houses do. For flats the estimate is \FlatPremiumPct\ (95\% CI: [\FlatCILowPct, \FlatCIHighPct]). For independent houses the estimate is \HousePremiumPct\ (95\% CI: [\HouseCILowPct, \HouseCIHighPct]). At the sample median house price of \MedianHousePriceCr\ crore, that premium corresponds to approximately \MedianHouseWTPLakh\ lakh.
+
+\input{../tex/tab_heterogeneity.tex}
+
+That pattern is sensible. Vaastu is plausibly more salient in independent houses because the overall structure, entrance placement, room arrangement, and plot geometry are more under the control of the owner or developer than in a standard apartment unit.
+
+\subsection{Why the house design still feels data-thin}
+
+The house result is the one worth chasing, but it comes with a small-cell warning label. Table~\ref{tab:house-support} shows why. The house sample has \HouseListings\ observations overall and \HouseVaastuListings\ Vaastu-tagged listings, but those are spread across \HouseSectorsTotal\ sectors. Only \HouseSectorsWithVaastu\ sectors contain any Vaastu house at all, only \HouseSectorsWithBoth\ contain both Vaastu and non-Vaastu houses, and only \HouseSectorsWithFivePlusVaastu\ have at least five Vaastu houses. Among sectors with any Vaastu houses, the median Vaastu count is just \HouseMedianVaastuCountPositive. That is the real blocker behind the phrase ``small data'' in this context: not the headline sample size, but the scarcity of within-market support where the house premium appears to live.
+
+\input{../tex/tab_house_sector_support.tex}
+
+\subsection{Matching robustness}
+
+A nearest-neighbor matching exercise within sector and property type gives a premium of \MatchingPremiumPct\ (95\% CI: [\MatchingCILowPct, \MatchingCIHighPct]). The point estimate is directionally consistent with the regression evidence, though it remains only a robustness check rather than a cure for all ills.
+
+\input{../tex/tab_matching.tex}
+
+\section{What this does and does not say about welfare}
+
+A first-stage hedonic estimate is not the same thing as a complete welfare analysis. What the preferred specification identifies is the capitalization of a marketed Vaastu attribute into list prices. In a fixed-stock market, much of that premium can represent a transfer into seller surplus rather than a deadweight loss. To move from capitalization to full welfare, one would want either a second-stage Rosen-style demand recovery, a quasi-experiment that shifts Vaastu salience or supply, or richer transaction data that support a more explicit structural or reduced-form welfare exercise.
+
+There are also measurement limits. List prices are not transaction prices. Vaastu mentions are selectively marketed. Absence of the label is not the same as non-compliance. Some directional or layout attributes correlated with Vaastu may be only partially observed. So the correct interpretation is modest: the package estimates WTP for \emph{marketed Vaastu compliance in listings}, not an engineering-certified Vaastu treatment effect.
+
+\section{Scaling beyond Gurugram}
+
+The package includes a collection script that targets Housing.com independent-house listings city by city, saves raw HTML and text, checks \texttt{robots.txt}, and emits a normalized CSV ready for analysis. The collector is designed for cautious scaling rather than cowboy scraping. It saves raw files first so the parsing logic can be audited later, because portals mutate their DOMs the way trickster gods mutate alibis.
+
+The visible inventory on current city pages suggests that a multi-city build is feasible. On March 15, 2026, the inspected Housing.com independent-house search pages showed about 2,219 Hyderabad listings, 2,334 Bangalore listings, 3,843 Chennai listings, and 549 Pune listings \cite{housing_hyderabad_2026,housing_bangalore_2026,housing_chennai_2026,housing_pune_2026}. That is enough headline inventory to justify expansion. The actual blockers are not mystical. They are data-engineering chores: locality harmonization, duplicate listing removal, stable Vaastu parsing, and the need to retain enough within-locality support among independent houses.
+
+A stronger next-stage design would therefore prioritize independent houses in a handful of cities where Vaastu salience and inventory depth are both high, rather than pooling everything at once into a giant statistical smoothie. Bangalore, Hyderabad, Chennai, and Pune are natural candidates for that next pass.
+
+\section{Conclusion}
+
+This package shows that a Vaastu WTP estimate is feasible with public listing data, but it also shows where the floorboards creak. In Gurugram, the average Vaastu premium becomes small once location and quality are controlled for, yet independent houses retain a meaningful premium of about \HousePremiumPct. The design is reproducible, transparent, and expandable. It is not, however, the final causal or welfare word. To get there, the research agenda needs more cities, better within-locality support for houses, tighter measurement of Vaastu-relevant design, and preferably transaction data.
+
+That is still enough to be useful. The current package turns a vague research hunch into a replicable prototype, a scalable collection pipeline, and a manuscript whose numbers are tied directly to the code and outputs rather than to hand-edited prose. Tiny mercy, large improvement.
+
+\bibliographystyle{apalike}
+\bibliography{vaastu_wtp_refs}
+
+\end{document}

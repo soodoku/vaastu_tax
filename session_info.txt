@@ -1,0 +1,4 @@
+mode: legacy_gurugram
+root: /Users/soodoku/Documents/GitHub/vaastu_tax
+rows: 3916
+generated_files: ['tex/tab_average_models.tex', 'figs/vaastu_coefficients.png']

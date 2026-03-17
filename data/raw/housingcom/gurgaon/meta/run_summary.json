@@ -1,0 +1,21 @@
+{
+  "city": "gurgaon",
+  "base_url": "https://housing.com/in/buy/gurgaon/house-gurgaon",
+  "n_search_pages_fetched": 10,
+  "search_inventory_totals": [
+    987,
+    1000,
+    1024,
+    1019,
+    1023,
+    1022,
+    1022,
+    987,
+    925,
+    925
+  ],
+  "n_detail_urls_deduplicated": 278,
+  "n_rows_written_this_run": 278,
+  "parsed_csv": "parsed_listings.csv",
+  "parsed_jsonl": "parsed_listings.jsonl"
+}

@@ -1,0 +1,194 @@
+{
+  "generated_at": "2026-03-16T19:24:00.227659",
+  "coverage_by_source": {
+    "campusx": {
+      "n": 7764,
+      "source": "campusx",
+      "fields": {
+        "price_crore": {
+          "non_null": 7726,
+          "coverage_pct": 99.5
+        },
+        "builtup_area_sqft": {
+          "non_null": 7726,
+          "coverage_pct": 99.5
+        },
+        "carpet_area_sqft": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "bhk": {
+          "non_null": 7764,
+          "coverage_pct": 100.0
+        },
+        "bathrooms": {
+          "non_null": 7764,
+          "coverage_pct": 100.0
+        },
+        "balconies": {
+          "non_null": 7764,
+          "coverage_pct": 100.0
+        },
+        "locality": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "sector": {
+          "non_null": 7048,
+          "coverage_pct": 90.8
+        },
+        "facing": {
+          "non_null": 5482,
+          "coverage_pct": 70.6
+        },
+        "furnishing": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "floor_number": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "total_floors": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "property_age": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "vaastu_mentioned": {
+          "non_null": 7764,
+          "coverage_pct": 100.0
+        }
+      }
+    },
+    "kaggle_arvanshul": {
+      "n": 38502,
+      "source": "kaggle_arvanshul",
+      "fields": {
+        "price_crore": {
+          "non_null": 29705,
+          "coverage_pct": 77.2
+        },
+        "builtup_area_sqft": {
+          "non_null": 12112,
+          "coverage_pct": 31.5
+        },
+        "carpet_area_sqft": {
+          "non_null": 9028,
+          "coverage_pct": 23.4
+        },
+        "bhk": {
+          "non_null": 34948,
+          "coverage_pct": 90.8
+        },
+        "bathrooms": {
+          "non_null": 10704,
+          "coverage_pct": 27.8
+        },
+        "balconies": {
+          "non_null": 28505,
+          "coverage_pct": 74.0
+        },
+        "locality": {
+          "non_null": 10704,
+          "coverage_pct": 27.8
+        },
+        "sector": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "facing": {
+          "non_null": 38502,
+          "coverage_pct": 100.0
+        },
+        "furnishing": {
+          "non_null": 38502,
+          "coverage_pct": 100.0
+        },
+        "floor_number": {
+          "non_null": 31981,
+          "coverage_pct": 83.1
+        },
+        "total_floors": {
+          "non_null": 37850,
+          "coverage_pct": 98.3
+        },
+        "property_age": {
+          "non_null": 38502,
+          "coverage_pct": 100.0
+        },
+        "vaastu_mentioned": {
+          "non_null": 38502,
+          "coverage_pct": 100.0
+        }
+      }
+    },
+    "our_scraper": {
+      "n": 5,
+      "source": "our_scraper",
+      "fields": {
+        "price_crore": {
+          "non_null": 5,
+          "coverage_pct": 100.0
+        },
+        "builtup_area_sqft": {
+          "non_null": 3,
+          "coverage_pct": 60.0
+        },
+        "carpet_area_sqft": {
+          "non_null": 1,
+          "coverage_pct": 20.0
+        },
+        "bhk": {
+          "non_null": 4,
+          "coverage_pct": 80.0
+        },
+        "bathrooms": {
+          "non_null": 5,
+          "coverage_pct": 100.0
+        },
+        "balconies": {
+          "non_null": 3,
+          "coverage_pct": 60.0
+        },
+        "locality": {
+          "non_null": 5,
+          "coverage_pct": 100.0
+        },
+        "sector": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "facing": {
+          "non_null": 5,
+          "coverage_pct": 100.0
+        },
+        "furnishing": {
+          "non_null": 4,
+          "coverage_pct": 80.0
+        },
+        "floor_number": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "total_floors": {
+          "non_null": 0,
+          "coverage_pct": 0.0
+        },
+        "property_age": {
+          "non_null": 5,
+          "coverage_pct": 100.0
+        },
+        "vaastu_mentioned": {
+          "non_null": 5,
+          "coverage_pct": 100.0
+        }
+      }
+    }
+  },
+  "warnings": [
+    "WARNING: our_scraper has only 5 observations (too small for analysis)"
+  ]
+}

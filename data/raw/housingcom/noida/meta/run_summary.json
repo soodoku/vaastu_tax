@@ -1,0 +1,21 @@
+{
+  "city": "noida",
+  "base_url": "https://housing.com/in/buy/noida/house-noida",
+  "n_search_pages_fetched": 10,
+  "search_inventory_totals": [
+    311,
+    316,
+    316,
+    316,
+    316,
+    316,
+    316,
+    313,
+    311,
+    311
+  ],
+  "n_detail_urls_deduplicated": 268,
+  "n_rows_written_this_run": 268,
+  "parsed_csv": "parsed_listings.csv",
+  "parsed_jsonl": "parsed_listings.jsonl"
+}

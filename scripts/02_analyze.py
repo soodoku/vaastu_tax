@@ -779,7 +779,7 @@ def main() -> None:
     ensure_dir(derived)
 
     if args.mode == "legacy_gurugram":
-        raw_dir = Path(args.raw_dir) if args.raw_dir else root / "data" / "raw" / "gurugram_legacy"
+        raw_dir = Path(args.raw_dir) if args.raw_dir else root / "data" / "raw" / "99acres_campusx"
         a = build_legacy_gurugram_dataset(raw_dir)
         save_analysis_sample(a, derived / "vaastu_analysis_sample.csv")
         avg_df, type_df = run_legacy_models(a)

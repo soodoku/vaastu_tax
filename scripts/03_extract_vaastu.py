@@ -119,6 +119,8 @@ def load_campusx_data(root: Path) -> pd.DataFrame:
 
     dfs = []
     for csv_file in campusx_dir.glob("*.csv"):
+        if "gurgaon_properties_cleaned" in csv_file.name:
+            continue
         try:
             df = pd.read_csv(csv_file, low_memory=False)
             prop_type = "flat" if "flat" in csv_file.name.lower() else "house"

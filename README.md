@@ -8,17 +8,16 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 
 ## Key Findings
 
-Source-stratified hedonic regression results:
+Hedonic regression results from Gurugram prototype (n=3,916):
 
-| Source | N | Vaastu Premium | 95% CI | Significance |
-|--------|---|----------------|--------|--------------|
-| campusx (Gurgaon) | 6,943 | +6.7% | [3.4%, 10.1%] | *** |
-| kaggle_arvanshul (multi-city) | 21,512 | -3.2% | [-7.4%, 1.1%] | n.s. |
-| **Aggregate** | **29,137** | **+12.5%** | **[9.1%, 14.4%]** | *** |
+| Specification | N | Vaastu Premium | 95% CI | Significance |
+|--------------|---|----------------|--------|--------------|
+| + sector FE (average) | 3,916 | +2.7% | [-0.9%, 6.4%] | n.s. |
+| Flat (type-specific) | 2,995 | -0.0% | [-3.4%, 3.4%] | n.s. |
+| **House (type-specific)** | 921 | **+11.9%** | [1.1%, 23.9%] | ** |
+| Matching robustness | 392 | +6.0% | [0.4%, 12.4%] | * |
 
-- campusx data shows significant positive Vaastu premium with sector fixed effects
-- kaggle_arvanshul multi-city data shows no significant effect with city fixed effects
-- Aggregate model with city+source fixed effects shows strong positive premium
+Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 lakh at median price), while flats show no effect.
 
 ## Data Sources
 

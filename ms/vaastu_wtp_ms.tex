@@ -127,6 +127,19 @@ This package shows that a Vaastu WTP estimate is feasible with public listing da
 
 That is still enough to be useful. The current package turns a vague research hunch into a replicable prototype, a scalable collection pipeline, and a manuscript whose numbers are tied directly to the code and outputs rather than to hand-edited prose. Tiny mercy, large improvement.
 
+\appendix
+
+\section{Robustness: Housing.com Data}
+\label{app:housingcom}
+
+As a robustness check, I estimate the Vaastu premium using independently scraped Housing.com independent-house listings from seven Indian cities. This provides an out-of-sample test using a different listing platform.
+
+Table~\ref{tab:housingcom-robustness} reports the results. The overall Vaastu premium across 1,670 Housing.com listings is +7.1\%, directionally consistent with the CampusX estimate (+6.7\%***) but not statistically significant ($p=0.15$). The city-level estimates show substantial heterogeneity. Mumbai shows a large and significant premium of +36.3\% ($p<0.05$), while other cities show smaller or null effects.
+
+The Housing.com sample differs from the CampusX data in two key respects: (1) the Vaastu mention rate is much lower (16\% vs.\ 53\%), consistent with the observation that CampusX may over-sample Vaastu-marketed listings; and (2) the Housing.com sample pools multiple cities rather than focusing on Gurgaon. The lower Vaastu prevalence reduces statistical power, which may explain the wider confidence intervals.
+
+\input{../tabs/tab_housingcom_robustness.tex}
+
 \bibliographystyle{apalike}
 \bibliography{vaastu_wtp_refs}
 

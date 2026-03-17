@@ -18,6 +18,7 @@ import statsmodels.formula.api as smf
 warnings.filterwarnings("ignore")
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "housingcom"
+TABS_DIR = Path(__file__).parent.parent / "tabs"
 
 
 def load_housingcom_data() -> pd.DataFrame:
@@ -270,6 +271,72 @@ def run_city_regressions(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(city_results)
 
 
+def write_latex_table(city_results: pd.DataFrame, overall_results: dict) -> None:
+    """Write LaTeX table to tabs directory."""
+    TABS_DIR.mkdir(parents=True, exist_ok=True)
+
+    lines = [
+        r"\begin{table}[!htbp]",
+        r"\centering",
+        r"\caption{Housing.com Robustness: Vaastu Premium by City}",
+        r"\label{tab:housingcom-robustness}",
+        r"\begin{tabular}{lrrrrr}",
+        r"\toprule",
+        r"City & N & Vaastu N & Vaastu \% & Premium & Sig. \\",
+        r"\midrule",
+    ]
+
+    city_order = ["mumbai", "bangalore", "chennai", "pune", "hyderabad"]
+    for city in city_order:
+        row = city_results[city_results["city"] == city]
+        if len(row) == 0:
+            continue
+        row = row.iloc[0]
+        sig = ""
+        if row["pval"] < 0.01:
+            sig = "***"
+        elif row["pval"] < 0.05:
+            sig = "**"
+        elif row["pval"] < 0.1:
+            sig = "*"
+
+        pct_str = f"+{row['pct']:.1f}\\%" if row["pct"] >= 0 else f"$-${abs(row['pct']):.1f}\\%"
+        lines.append(
+            f"{city.title()} & {int(row['n']):,} & {int(row['vaastu_n'])} & {row['vaastu_pct']:.1f}\\% & {pct_str} & {sig} \\\\"
+        )
+
+    m6 = overall_results["m6"]
+    overall_sig = ""
+    if m6["pval"] < 0.01:
+        overall_sig = "***"
+    elif m6["pval"] < 0.05:
+        overall_sig = "**"
+    elif m6["pval"] < 0.1:
+        overall_sig = "*"
+
+    overall_n = int(m6["n"])
+    overall_vaastu_n = city_results["vaastu_n"].sum()
+    overall_vaastu_pct = 100 * overall_vaastu_n / overall_n
+    overall_pct_str = f"+{m6['pct']:.1f}\\%"
+
+    lines.extend([
+        r"\midrule",
+        f"\\textbf{{Overall}} & \\textbf{{{overall_n:,}}} & \\textbf{{{int(overall_vaastu_n)}}} & \\textbf{{{overall_vaastu_pct:.1f}\\%}} & \\textbf{{{overall_pct_str}}} & {overall_sig} \\\\",
+        r"\bottomrule",
+        r"\end{tabular}",
+        r"",
+        r"\vspace{0.5em}",
+        r"\parbox{\textwidth}{\small\textit{Notes}: Housing.com independent-house listings scraped March 2026. Model: $\log(\text{price}) \sim \text{vaastu} + \text{BHK} + \log(\text{area}) + \text{city FE} + \text{facing} + \text{furnishing}$. HC3 standard errors. Gurgaon and Noida omitted due to insufficient Vaastu observations ($<$20). ** $p<0.05$, *** $p<0.01$.}",
+        r"\end{table}",
+    ])
+
+    output_path = TABS_DIR / "tab_housingcom_robustness.tex"
+    with open(output_path, "w") as f:
+        f.write("\n".join(lines))
+
+    print(f"\nWrote LaTeX table to {output_path}")
+
+
 def print_comparison():
     """Print comparison with other data sources."""
     print("\n" + "=" * 70)
@@ -312,6 +379,8 @@ def main():
                 ["city", "n", "vaastu_n", "vaastu_pct", "pct", "pval"]
             ].to_string(index=False)
         )
+
+        write_latex_table(city_results, results)
 
     print("\n" + "=" * 70)
     print("SUMMARY")

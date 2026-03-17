@@ -8,7 +8,15 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 
 ## Key Findings
 
-Hedonic regression results from Gurugram prototype (n=3,916):
+### Summary Across Data Sources
+
+| Source | N | Vaastu % | Premium | Sig. |
+|--------|---|----------|---------|------|
+| CampusX (Gurgaon) | 3,916 | 53% | +6.7% | *** |
+| Housing.com (7 cities) | 1,670 | 16% | +7.1% | n.s. |
+| Kaggle (4 cities) | ~21K | 5.5% | -3.2% | n.s. |
+
+### Gurugram Prototype (CampusX Data)
 
 | Specification | N | Vaastu Premium | 95% CI | Significance |
 |--------------|---|----------------|--------|--------------|
@@ -17,7 +25,17 @@ Hedonic regression results from Gurugram prototype (n=3,916):
 | **House (type-specific)** | 921 | **+11.9%** | [1.1%, 23.9%] | ** |
 | Matching robustness | 392 | +6.0% | [0.4%, 12.4%] | * |
 
-Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 lakh at median price), while flats show no effect.
+### Housing.com Robustness (by City)
+
+| City | N | Vaastu % | Premium | Sig. |
+|------|---|----------|---------|------|
+| Mumbai | 270 | 12% | +36.3% | ** |
+| Bangalore | 262 | 16% | +19.3% | n.s. |
+| Pune | 274 | 27% | +5.5% | n.s. |
+| Chennai | 285 | 12% | +0.6% | n.s. |
+| Hyderabad | 277 | 19% | -3.3% | n.s. |
+
+Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 lakh at median price), while flats show no effect. The Housing.com data provides directionally consistent results (+7.1%) but with wider confidence intervals due to lower Vaastu mention rates.
 
 ## Data Sources
 

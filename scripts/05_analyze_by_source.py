@@ -2,8 +2,8 @@
 """Run hedonic regressions by source + aggregate estimate.
 
 Outputs:
-- tex/tab_by_source_coefs.tex - Vaastu coefficient by source
-- tex/tab_aggregate_coef.tex - Pooled estimate
+- tabs/tab_by_source_coefs.tex - Vaastu coefficient by source
+- tabs/tab_aggregate_coef.tex - Pooled estimate
 - figs/coef_by_source.png - Forest plot of source-specific estimates
 - data/derived/regression_results.json - Full regression results
 
@@ -277,7 +277,7 @@ def generate_forest_plot(results: list[dict], output_path: Path) -> None:
 def main() -> None:
     root = project_root()
     derived_dir = root / "data" / "derived"
-    tex_dir = root / "tex"
+    tex_dir = root / "tabs"
     figs_dir = root / "figs"
 
     csv_path = derived_dir / "all_99acres_vaastu.csv"

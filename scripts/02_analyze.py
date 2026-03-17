@@ -771,7 +771,7 @@ def save_analysis_sample(a: pd.DataFrame, out_path: Path) -> None:
 def main() -> None:
     args = parse_args()
     root = Path(args.root)
-    out_tex = root / "tex"
+    out_tex = root / "tabs"
     out_fig = root / "figs"
     derived = root / "data" / "derived"
     ensure_dir(out_tex)

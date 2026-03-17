@@ -74,7 +74,7 @@ data/
   config/                   # City URL configurations
   derived/                  # Analysis samples
 ms/                         # LaTeX manuscript
-tex/                        # Generated tables and macros
+tabs/                        # Generated tables and macros
 figs/                       # Generated figures
 ```
 

@@ -42,12 +42,26 @@ def load_magicbricks_data() -> pd.DataFrame:
         all_data.append(df)
 
     combined = pd.concat(all_data, ignore_index=True)
+
+    before_dedup = len(combined)
+    combined = combined.drop_duplicates(subset=["property_id"])
+    after_dedup = len(combined)
+    if before_dedup > after_dedup:
+        print(f"Deduplicated: {before_dedup} -> {after_dedup} listings")
+
     return combined
 
 
 def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean and prepare data for regression."""
+    """Clean and prepare data for regression (shared preprocessing)."""
     df = df.copy()
+
+    # Add listing_type column based on URL pattern
+    df["listing_type"] = "sale"
+    if "url" in df.columns:
+        df.loc[df["url"].str.contains("Rent", case=False, na=False), "listing_type"] = (
+            "rent"
+        )
 
     df = df.dropna(subset=["price_crore", "builtup_area_sqft", "bhk"])
 
@@ -61,16 +75,31 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     df["vaastu"] = df["vaastu_mentioned"].fillna(0).astype(int)
     df["bhk_cat"] = pd.Categorical(df["bhk"].astype(int).clip(upper=6))
 
-    df["facing_clean"] = df["facing"].fillna("Unknown").astype(str).str.strip()
-    df["facing_clean"] = df["facing_clean"].replace({"": "Unknown", "nan": "Unknown"})
-
     df["furnishing_clean"] = df["furnishing"].fillna("Unknown").astype(str).str.strip()
-    df["furnishing_clean"] = df["furnishing_clean"].replace({"": "Unknown", "nan": "Unknown"})
+    df["furnishing_clean"] = df["furnishing_clean"].replace(
+        {"": "Unknown", "nan": "Unknown"}
+    )
 
-    # Extract base city (remove property type suffix)
+    df["possession_clean"] = (
+        df["possession_status"].fillna("Unknown").astype(str).str.strip()
+    )
+    df["possession_clean"] = df["possession_clean"].replace(
+        {"": "Unknown", "nan": "Unknown"}
+    )
+
+    df["seller_clean"] = df["seller_type"].fillna("Unknown").astype(str).str.strip()
+    df["seller_clean"] = df["seller_clean"].replace({"": "Unknown", "nan": "Unknown"})
+
     df["base_city"] = df["city"].apply(lambda x: x.split("-")[0] if "-" in x else x)
 
     return df
+
+
+def filter_sale_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Filter for sale listings with appropriate price threshold."""
+    df_sale = df[df["listing_type"] == "sale"].copy()
+    df_sale = df_sale[df_sale["price_crore"] >= 0.05]  # >= 5 lakh
+    return df_sale
 
 
 def print_data_summary(df: pd.DataFrame) -> None:
@@ -99,18 +128,30 @@ def print_data_summary(df: pd.DataFrame) -> None:
     summary = summary.sort_values("n", ascending=False)
     print(summary.to_string())
 
-    vaastu_n = df["vaastu"].sum()
+    vaastu_n = int(df["vaastu"].sum())
     vaastu_pct = 100 * df["vaastu"].mean()
     print(f"\nTotal: {len(df):,} listings, {vaastu_n:,} vaastu ({vaastu_pct:.1f}%)")
 
+    print("\n## Covariate Coverage")
+    covariates = [
+        "bathrooms",
+        "furnishing",
+        "possession_status",
+        "seller_type",
+        "floor_no",
+        "total_floors",
+        "rating_overall",
+    ]
+    for cov in covariates:
+        if cov in df.columns:
+            n_valid = df[cov].notna().sum()
+            pct = 100 * n_valid / len(df)
+            print(f"  {cov:20s}: {n_valid:,} ({pct:.1f}%)")
+
     print("\n## Price Summary")
-    print(f"Valid prices: {len(df):,}")
     print(f"Min: ₹{df['price_crore'].min():.2f} Cr")
     print(f"Max: ₹{df['price_crore'].max():.2f} Cr")
     print(f"Median: ₹{df['price_crore'].median():.2f} Cr")
-
-    print("\n## Facing Distribution")
-    print(df["facing_clean"].value_counts().head(10).to_string())
 
 
 def run_regressions(df: pd.DataFrame) -> dict:
@@ -134,77 +175,188 @@ def run_regressions(df: pd.DataFrame) -> dict:
     print(f"Premium: {pct:+.1f}%")
     results["m1"] = {"coef": coef, "se": se, "pval": pval, "pct": pct}
 
-    # Model 2: + BHK
+    # Model 2: + BHK + Area
     print("\n" + "-" * 70)
-    print("Model 2: ln_price ~ vaastu + bhk_cat")
+    print("Model 2: ln_price ~ vaastu + bhk_cat + ln_area")
     print("-" * 70)
-    m2 = smf.ols("ln_price ~ vaastu + bhk_cat", data=df).fit(cov_type="HC3")
+    m2 = smf.ols("ln_price ~ vaastu + bhk_cat + ln_area", data=df).fit(cov_type="HC3")
     coef = m2.params["vaastu"]
     se = m2.bse["vaastu"]
     pval = m2.pvalues["vaastu"]
     pct = (np.exp(coef) - 1) * 100
     print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
     print(f"Premium: {pct:+.1f}%")
-    results["m2"] = {"coef": coef, "se": se, "pval": pval, "pct": pct}
+    print(f"R²: {m2.rsquared:.3f}, N: {int(m2.nobs)}")
+    results["m2"] = {
+        "coef": coef,
+        "se": se,
+        "pval": pval,
+        "pct": pct,
+        "r2": m2.rsquared,
+        "n": m2.nobs,
+    }
 
-    # Model 3: + Area
+    # Model 3: + City FE
     print("\n" + "-" * 70)
-    print("Model 3: ln_price ~ vaastu + bhk_cat + ln_area")
+    print("Model 3: + C(base_city)")
     print("-" * 70)
-    m3 = smf.ols("ln_price ~ vaastu + bhk_cat + ln_area", data=df).fit(cov_type="HC3")
+    m3 = smf.ols("ln_price ~ vaastu + bhk_cat + ln_area + C(base_city)", data=df).fit(
+        cov_type="HC3"
+    )
     coef = m3.params["vaastu"]
     se = m3.bse["vaastu"]
     pval = m3.pvalues["vaastu"]
     pct = (np.exp(coef) - 1) * 100
     print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
     print(f"Premium: {pct:+.1f}%")
-    results["m3"] = {"coef": coef, "se": se, "pval": pval, "pct": pct}
-
-    # Model 4: + City FE
-    print("\n" + "-" * 70)
-    print("Model 4: ln_price ~ vaastu + bhk_cat + ln_area + C(base_city)")
-    print("-" * 70)
-    m4 = smf.ols("ln_price ~ vaastu + bhk_cat + ln_area + C(base_city)", data=df).fit(
-        cov_type="HC3"
-    )
-    coef = m4.params["vaastu"]
-    se = m4.bse["vaastu"]
-    pval = m4.pvalues["vaastu"]
-    pct = (np.exp(coef) - 1) * 100
-    print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
-    print(f"Premium: {pct:+.1f}%")
-    print(f"R²: {m4.rsquared:.3f}, N: {m4.nobs:.0f}")
-    results["m4"] = {
+    print(f"R²: {m3.rsquared:.3f}, N: {int(m3.nobs)}")
+    results["m3"] = {
         "coef": coef,
         "se": se,
         "pval": pval,
         "pct": pct,
-        "r2": m4.rsquared,
-        "n": m4.nobs,
+        "r2": m3.rsquared,
+        "n": m3.nobs,
     }
 
-    # Model 5: + Facing
-    print("\n" + "-" * 70)
-    print("Model 5: + C(facing_clean)")
-    print("-" * 70)
-    m5 = smf.ols(
-        "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + C(facing_clean)", data=df
-    ).fit(cov_type="HC3")
-    coef = m5.params["vaastu"]
-    se = m5.bse["vaastu"]
-    pval = m5.pvalues["vaastu"]
-    pct = (np.exp(coef) - 1) * 100
-    print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
-    print(f"Premium: {pct:+.1f}%")
-    print(f"R²: {m5.rsquared:.3f}, N: {m5.nobs:.0f}")
-    results["m5"] = {
-        "coef": coef,
-        "se": se,
-        "pval": pval,
-        "pct": pct,
-        "r2": m5.rsquared,
-        "n": m5.nobs,
-    }
+    # Model 4: + Bathrooms
+    df_bath = df.dropna(subset=["bathrooms"])
+    if len(df_bath) >= 100 and df_bath["vaastu"].sum() >= 5:
+        print("\n" + "-" * 70)
+        print("Model 4: + bathrooms")
+        print("-" * 70)
+        m4 = smf.ols(
+            "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + bathrooms",
+            data=df_bath,
+        ).fit(cov_type="HC3")
+        coef = m4.params["vaastu"]
+        se = m4.bse["vaastu"]
+        pval = m4.pvalues["vaastu"]
+        pct = (np.exp(coef) - 1) * 100
+        print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+        print(f"Premium: {pct:+.1f}%")
+        print(f"R²: {m4.rsquared:.3f}, N: {int(m4.nobs)}")
+        results["m4"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "r2": m4.rsquared,
+            "n": m4.nobs,
+        }
+
+    # Model 5: + Furnishing
+    furn_levels = df_bath["furnishing_clean"].nunique()
+    if furn_levels > 1:
+        print("\n" + "-" * 70)
+        print("Model 5: + C(furnishing_clean)")
+        print("-" * 70)
+        m5 = smf.ols(
+            "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + bathrooms + C(furnishing_clean)",
+            data=df_bath,
+        ).fit(cov_type="HC3")
+        coef = m5.params["vaastu"]
+        se = m5.bse["vaastu"]
+        pval = m5.pvalues["vaastu"]
+        pct = (np.exp(coef) - 1) * 100
+        print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+        print(f"Premium: {pct:+.1f}%")
+        print(f"R²: {m5.rsquared:.3f}, N: {int(m5.nobs)}")
+        results["m5"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "r2": m5.rsquared,
+            "n": m5.nobs,
+        }
+
+    # Model 6: + Possession Status
+    poss_levels = df_bath["possession_clean"].nunique()
+    if poss_levels > 1:
+        print("\n" + "-" * 70)
+        print("Model 6: + C(possession_clean)")
+        print("-" * 70)
+        formula = "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + bathrooms"
+        if furn_levels > 1:
+            formula += " + C(furnishing_clean)"
+        formula += " + C(possession_clean)"
+        m6 = smf.ols(formula, data=df_bath).fit(cov_type="HC3")
+        coef = m6.params["vaastu"]
+        se = m6.bse["vaastu"]
+        pval = m6.pvalues["vaastu"]
+        pct = (np.exp(coef) - 1) * 100
+        print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+        print(f"Premium: {pct:+.1f}%")
+        print(f"R²: {m6.rsquared:.3f}, N: {int(m6.nobs)}")
+        results["m6"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "r2": m6.rsquared,
+            "n": m6.nobs,
+        }
+
+    # Model 7: + Seller Type
+    seller_levels = df_bath["seller_clean"].nunique()
+    if seller_levels > 1:
+        print("\n" + "-" * 70)
+        print("Model 7: + C(seller_clean)")
+        print("-" * 70)
+        formula = "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + bathrooms"
+        if furn_levels > 1:
+            formula += " + C(furnishing_clean)"
+        if poss_levels > 1:
+            formula += " + C(possession_clean)"
+        formula += " + C(seller_clean)"
+        m7 = smf.ols(formula, data=df_bath).fit(cov_type="HC3")
+        coef = m7.params["vaastu"]
+        se = m7.bse["vaastu"]
+        pval = m7.pvalues["vaastu"]
+        pct = (np.exp(coef) - 1) * 100
+        print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+        print(f"Premium: {pct:+.1f}%")
+        print(f"R²: {m7.rsquared:.3f}, N: {int(m7.nobs)}")
+        results["m7"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "r2": m7.rsquared,
+            "n": m7.nobs,
+        }
+
+    # Model 8: + Ratings (if available)
+    df_ratings = df_bath.dropna(subset=["rating_overall"])
+    if len(df_ratings) >= 100 and df_ratings["vaastu"].sum() >= 5:
+        print("\n" + "-" * 70)
+        print("Model 8: + rating_overall")
+        print("-" * 70)
+        formula = "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + bathrooms"
+        if furn_levels > 1:
+            formula += " + C(furnishing_clean)"
+        if poss_levels > 1:
+            formula += " + C(possession_clean)"
+        if seller_levels > 1:
+            formula += " + C(seller_clean)"
+        formula += " + rating_overall"
+        m8 = smf.ols(formula, data=df_ratings).fit(cov_type="HC3")
+        coef = m8.params["vaastu"]
+        se = m8.bse["vaastu"]
+        pval = m8.pvalues["vaastu"]
+        pct = (np.exp(coef) - 1) * 100
+        print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+        print(f"Premium: {pct:+.1f}%")
+        print(f"R²: {m8.rsquared:.3f}, N: {int(m8.nobs)}")
+        results["m8"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "r2": m8.rsquared,
+            "n": m8.nobs,
+        }
 
     return results
 
@@ -214,26 +366,32 @@ def run_city_regressions(df: pd.DataFrame) -> pd.DataFrame:
     print("\n" + "=" * 70)
     print("CITY-SPECIFIC VAASTU EFFECTS")
     print("=" * 70)
-    print("\nModel: ln_price ~ vaastu + bhk_cat + ln_area\n")
+    print(
+        "\nModel: ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(furnishing_clean)\n"
+    )
 
+    df_bath = df.dropna(subset=["bathrooms"])
     city_results = []
 
-    for city in sorted(df["base_city"].unique()):
-        city_df = df[df["base_city"] == city]
+    for city in sorted(df_bath["base_city"].unique()):
+        city_df = df_bath[df_bath["base_city"] == city]
         n = len(city_df)
-        vaastu_n = city_df["vaastu"].sum()
+        vaastu_n = int(city_df["vaastu"].sum())
         vaastu_pct = 100 * city_df["vaastu"].mean()
 
-        if vaastu_n < 10:
+        if vaastu_n < 5:
             print(
                 f"{city:15s}: n={n:5d}, vaastu={vaastu_n:3d} ({vaastu_pct:5.1f}%) - SKIPPED (too few vaastu)"
             )
             continue
 
         try:
-            m = smf.ols("ln_price ~ vaastu + bhk_cat + ln_area", data=city_df).fit(
-                cov_type="HC3"
-            )
+            furn_levels = city_df["furnishing_clean"].nunique()
+            formula = "ln_price ~ vaastu + bhk_cat + ln_area + bathrooms"
+            if furn_levels > 1:
+                formula += " + C(furnishing_clean)"
+
+            m = smf.ols(formula, data=city_df).fit(cov_type="HC3")
             coef = m.params["vaastu"]
             se = m.bse["vaastu"]
             pval = m.pvalues["vaastu"]
@@ -245,16 +403,18 @@ def run_city_regressions(df: pd.DataFrame) -> pd.DataFrame:
                 f"Premium: {pct:+6.1f}% (SE: {se:.3f}) {sig}"
             )
 
-            city_results.append({
-                "city": city,
-                "n": n,
-                "vaastu_n": vaastu_n,
-                "vaastu_pct": vaastu_pct,
-                "coef": coef,
-                "se": se,
-                "pval": pval,
-                "pct": pct,
-            })
+            city_results.append(
+                {
+                    "city": city,
+                    "n": n,
+                    "vaastu_n": vaastu_n,
+                    "vaastu_pct": vaastu_pct,
+                    "coef": coef,
+                    "se": se,
+                    "pval": pval,
+                    "pct": pct,
+                }
+            )
         except Exception as e:
             print(
                 f"{city:15s}: n={n:5d}, vaastu={vaastu_n:3d} ({vaastu_pct:5.1f}%) - ERROR: {e}"
@@ -273,38 +433,50 @@ def main():
 
     if len(df) == 0:
         print("ERROR: No valid data after cleaning")
-        print("\nNote: Price data appears to be broken - all prices show as 0.50 Cr")
-        print("This is due to the parser capturing filter text instead of actual prices.")
+        return
+
+    # Filter to sales only (rentals have no vaastu mentions)
+    n_sale = (df["listing_type"] == "sale").sum()
+    n_rent = (df["listing_type"] == "rent").sum()
+    print(f"  Sale: {n_sale:,}, Rent: {n_rent:,} (excluded - no vaastu data)")
+
+    df = filter_sale_data(df)
+    print(f"Sale listings after price filter: {len(df):,}")
+
+    if len(df) == 0:
+        print("ERROR: No valid sale data after filtering")
         return
 
     print_data_summary(df)
 
-    # Check for valid price variation
     if df["price_crore"].nunique() <= 1:
         print("\n" + "=" * 70)
         print("WARNING: PRICE DATA ISSUE DETECTED")
         print("=" * 70)
         print(f"All prices are: ₹{df['price_crore'].iloc[0]:.2f} Cr")
-        print("This indicates a price parsing bug - regression analysis not meaningful.")
-        print("\nVaastu detection is working correctly:")
-        print(f"  Vaastu mentioned: {df['vaastu'].sum():,} ({100*df['vaastu'].mean():.1f}%)")
-        print("\nTo fix: Update 02_parse_magicbricks.py price extraction logic")
         return
 
     results = run_regressions(df)
-    city_results = run_city_regressions(df)
+    run_city_regressions(df)
 
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    m5 = results.get("m5", results.get("m4", results["m3"]))
-    sig = get_significance_stars(m5["pval"])
-    print(f"""
+    best_model = results.get(
+        "m8",
+        results.get(
+            "m7", results.get("m6", results.get("m5", results.get("m4", results["m3"])))
+        ),
+    )
+    sig = get_significance_stars(best_model["pval"])
+    print(
+        f"""
 Magicbricks Overall Effect (with controls):
-  Premium: {m5['pct']:+.1f}% {sig}
-  p-value: {m5['pval']:.4f}
-  N: {m5.get('n', len(df)):.0f}
-""")
+  Premium: {best_model['pct']:+.1f}% {sig}
+  p-value: {best_model['pval']:.4f}
+  N: {best_model.get('n', len(df)):.0f}
+"""
+    )
 
 
 if __name__ == "__main__":

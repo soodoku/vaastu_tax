@@ -3,10 +3,15 @@
 
 This script parses raw files collected by 01_collect_magicbricks.py.
 
+Magicbricks project detail pages contain multiple individual property listings
+embedded in the SERVER_PRELOADED_STATE_ JSON. This script extracts each
+individual listing as a separate record.
+
 Workflow:
 1. Read scrape_manifest.jsonl to find all scraped detail pages.
-2. Parse each detail page's .html.gz file to extract structured fields.
-3. Output: parsed_listings.parquet
+2. Parse each detail page's .html.gz file to extract SERVER_PRELOADED_STATE_ JSON.
+3. Extract individual listings from bhkProjectDetailsMap.
+4. Output: parsed_listings.parquet
 
 Example
 -------
@@ -17,55 +22,22 @@ python scripts/02_parse_magicbricks.py --all-cities
 import argparse
 import gzip
 import json
-import re
 import sys
-from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.utils import (
-    RE_BHK,
-    RE_SQFT,
-    RE_CARPET,
-    RE_BUILTUP,
-    RE_BATH,
-    RE_BALCONY,
-    RE_POSTED_DATE,
-    RE_POSSESSION,
-    RE_FACING,
-    RE_FURNISHING,
-    RE_PROPERTY_AGE,
-    RE_SELLER_TYPE,
-    RE_RESULTS_COUNT,
-    normalize_ws,
-    slugify,
-    extract_lines,
-    price_to_crore,
-    number_from_match,
-    normalize_direction,
-    find_price_display,
-    find_first_matching_line,
-    extract_section,
-    write_parquet,
-    load_manifest,
-    read_existing_property_ids_parquet,
-    extract_vaastu_mentions,
-)
-
-
-RE_TITLE = re.compile(
-    r"^(\d+(?:\.\d+)?)\s*BHK\s+.+?"
-    r"(Independent House|Villa|Row House|Builder Floor|Penthouse|Apartment|Flat)\b",
-    re.I
-)
+from scripts.utils import (extract_vaastu_mentions, load_manifest,
+                           read_existing_property_ids_parquet, slugify,
+                           write_parquet)
 
 
 @dataclass
 class ListingRecord:
     property_id: str
+    project_id: str
     url: str
     city: str
     search_page: int
@@ -82,12 +54,20 @@ class ListingRecord:
     facing: str | None
     possession_status: str | None
     property_age: str | None
+    floor_no: int | None
+    total_floors: int | None
     amenities: str | None
     description: str | None
     vaastu_mentioned: int
     vaastu_mentions_text: str | None
     seller_type: str | None
     posted_date: str | None
+    rating_overall: float | None
+    rating_connectivity: float | None
+    rating_neighbourhood: float | None
+    rating_safety: float | None
+    project_name: str | None
+    developer_name: str | None
     collected_at: str | None
     raw_html_path: str
 
@@ -114,227 +94,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Re-parse all files even if already in parsed_listings.csv",
+        help="Re-parse all files even if already in parsed_listings.parquet",
     )
     return parser.parse_args()
-
-
-def find_title(lines: Sequence[str]) -> str | None:
-    for line in lines:
-        if RE_TITLE.search(line):
-            return line
-    return None
-
-
-def find_locality(lines: Sequence[str], title: str | None) -> str | None:
-    if not title:
-        return None
-    try:
-        idx = list(lines).index(title)
-    except ValueError:
-        return None
-    for cand in lines[idx + 1 : idx + 6]:
-        lower = cand.lower()
-        if not cand:
-            continue
-        if "₹" in cand:
-            continue
-        if RE_RESULTS_COUNT.search(cand):
-            continue
-        if any(tok in lower for tok in ["emi", "sq.ft", "amenities", "overview", "call for price"]):
-            continue
-        if len(cand) > 10:
-            return cand
-    return None
-
-
-def find_price_magicbricks(lines: Sequence[str], full_text: str) -> tuple[str | None, float | None]:
-    """Extract price from Magicbricks listing.
-
-    Magicbricks often has price split across lines:
-    - Line N: "₹"
-    - Line N+1: "19 Lac" or "1.5 Cr"
-
-    Also extracts from description text as fallback.
-    """
-    # Pattern 1: Look for "₹" followed by price on next line
-    for i, line in enumerate(lines):
-        if line.strip() == "₹" and i + 1 < len(lines):
-            next_line = lines[i + 1].strip()
-            # Check if next line is a price value (e.g., "19 Lac", "1.5 Cr")
-            if re.match(r"^[\d,.]+\s*(Lac|Lakh|L|Cr|Crore|K)?\s*$", next_line, re.I):
-                price_str = f"₹ {next_line}"
-                price_val = price_to_crore(price_str)
-                if price_val and price_val > 0.01:  # Reasonable price
-                    return price_str, price_val
-
-    # Pattern 2: Extract from description (e.g., "at a cost of ₹19 Lac")
-    price_pattern = re.compile(
-        r"(?:price|cost|available at|offered at|priced at)[:\s]*₹?\s*([\d,.]+)\s*(Lac|Lakh|L|Cr|Crore)?",
-        re.I
-    )
-    m = price_pattern.search(full_text)
-    if m:
-        value = float(m.group(1).replace(",", ""))
-        unit = (m.group(2) or "").lower()
-        if unit in ("cr", "crore"):
-            price_crore = value
-        elif unit in ("lac", "lakh", "l"):
-            price_crore = value / 100
-        else:
-            price_crore = None
-        if price_crore and price_crore > 0.01:
-            return f"₹{m.group(1)} {m.group(2) or ''}", price_crore
-
-    # Pattern 3: Look for INR ₹XX Lac pattern
-    inr_pattern = re.compile(r"INR\s*₹?\s*([\d,.]+)\s*(Lac|Lakh|L|Cr|Crore)?", re.I)
-    m = inr_pattern.search(full_text)
-    if m:
-        value = float(m.group(1).replace(",", ""))
-        unit = (m.group(2) or "").lower()
-        if unit in ("cr", "crore"):
-            price_crore = value
-        elif unit in ("lac", "lakh", "l"):
-            price_crore = value / 100
-        else:
-            price_crore = None
-        if price_crore and price_crore > 0.01:
-            return f"₹{m.group(1)} {m.group(2) or ''}", price_crore
-
-    return None, None
-
-
-def parse_detail_text(
-    text: str,
-    url: str,
-    city: str,
-    property_id: str,
-    search_page: int,
-    raw_html_path: str,
-    collected_at: str | None = None,
-) -> ListingRecord:
-    lines = extract_lines(text)
-    title = find_title(lines)
-    title_idx = lines.index(title) if title in lines else None
-    locality = find_locality(lines, title)
-
-    full_text = "\n".join(lines)
-    price_display, price_crore_val = find_price_magicbricks(lines, full_text)
-
-    full_text = "\n".join(lines)
-    bhk = number_from_match(RE_BHK, title or full_text)
-    bathrooms = number_from_match(RE_BATH, full_text)
-    balconies = number_from_match(RE_BALCONY, full_text)
-
-    carpet_area_sqft = number_from_match(RE_CARPET, full_text)
-    builtup_area_sqft = number_from_match(RE_BUILTUP, full_text)
-    if not builtup_area_sqft:
-        builtup_area_sqft = number_from_match(RE_SQFT, full_text)
-
-    facing_line = find_first_matching_line(lines, RE_FACING)
-    furnishing_line = find_first_matching_line(lines, RE_FURNISHING)
-    possession_line = find_first_matching_line(lines, RE_POSSESSION)
-
-    facing = None
-    if facing_line:
-        m = RE_FACING.search(facing_line)
-        if m:
-            facing = normalize_direction(m.group(1) or m.group(2))
-
-    furnishing = None
-    if furnishing_line:
-        m = RE_FURNISHING.search(furnishing_line)
-        furnishing = normalize_ws(m.group(1)) if m else None
-
-    possession_status = None
-    if possession_line:
-        m = RE_POSSESSION.search(possession_line)
-        possession_status = normalize_ws(m.group(1)) if m else None
-
-    property_age = None
-    age_match = RE_PROPERTY_AGE.search(full_text)
-    if age_match:
-        property_age = normalize_ws(age_match.group(1))
-
-    amenities = extract_section(lines, "Amenities")
-    if not amenities:
-        amenities = extract_section(lines, "Features")
-    description = extract_section(lines, "Description")
-    if not description:
-        description = extract_section(lines, "About this property")
-    if not description:
-        description = extract_section(lines, "Property Description")
-
-    combined_text = " ".join(filter(None, [title, amenities, description]))
-    vaastu_mentioned, vaastu_mentions_text = extract_vaastu_mentions(combined_text)
-
-    seller_type = None
-    seller_match = RE_SELLER_TYPE.search(full_text)
-    if seller_match:
-        seller_type = normalize_ws(seller_match.group(1))
-
-    posted_date = None
-    posted_match = RE_POSTED_DATE.search(full_text)
-    if posted_match:
-        posted_date = normalize_ws(posted_match.group(1))
-
-    return ListingRecord(
-        property_id=property_id,
-        url=url,
-        city=city,
-        search_page=search_page,
-        title=title,
-        locality=locality,
-        price_display=price_display,
-        price_crore=price_crore_val,
-        builtup_area_sqft=builtup_area_sqft,
-        carpet_area_sqft=carpet_area_sqft,
-        bhk=bhk,
-        bathrooms=bathrooms,
-        balconies=balconies,
-        furnishing=furnishing,
-        facing=facing,
-        possession_status=possession_status,
-        property_age=property_age,
-        amenities=amenities,
-        description=description,
-        vaastu_mentioned=int(vaastu_mentioned),
-        vaastu_mentions_text=vaastu_mentions_text,
-        seller_type=seller_type,
-        posted_date=posted_date,
-        collected_at=collected_at,
-        raw_html_path=raw_html_path,
-    )
-
-
-def get_fieldnames() -> list[str]:
-    return list(asdict(ListingRecord(
-        property_id="",
-        url="",
-        city="",
-        search_page=0,
-        title=None,
-        locality=None,
-        price_display=None,
-        price_crore=None,
-        builtup_area_sqft=None,
-        carpet_area_sqft=None,
-        bhk=None,
-        bathrooms=None,
-        balconies=None,
-        furnishing=None,
-        facing=None,
-        possession_status=None,
-        property_age=None,
-        amenities=None,
-        description=None,
-        vaastu_mentioned=0,
-        vaastu_mentions_text=None,
-        seller_type=None,
-        posted_date=None,
-        collected_at=None,
-        raw_html_path="",
-    )).keys())
 
 
 def read_html_gz(path: Path) -> str:
@@ -342,11 +104,233 @@ def read_html_gz(path: Path) -> str:
         return fh.read()
 
 
-def extract_text_from_html(html: str) -> str:
+def extract_preloaded_state(html: str) -> dict | None:
+    """Extract SERVER_PRELOADED_STATE_ JSON from HTML."""
     soup = BeautifulSoup(html, "html.parser")
-    if soup.body:
-        return soup.body.get_text(separator="\n", strip=True)
-    return soup.get_text(separator="\n", strip=True)
+
+    for script in soup.find_all("script"):
+        text = script.string or ""
+        if "window.SERVER_PRELOADED_STATE_" in text:
+            start = text.find("window.SERVER_PRELOADED_STATE_ = ")
+            if start >= 0:
+                json_start = start + len("window.SERVER_PRELOADED_STATE_ = ")
+                json_text = text[json_start:].strip()
+                if json_text.endswith(";"):
+                    json_text = json_text[:-1]
+                try:
+                    return json.loads(json_text)
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+def extract_project_ratings(data: dict) -> dict[str, float | None]:
+    """Extract project-level ratings from the data.
+
+    Magicbricks uses various rating keys:
+    - psmAvgRt: overall project rating
+    - securityRt: safety
+    - prjInfraRt: infrastructure/connectivity proxy
+    - prjMaintainanceRt: maintenance/neighbourhood proxy
+    """
+    ratings: dict[str, float | None] = {
+        "overall": None,
+        "connectivity": None,
+        "neighbourhood": None,
+        "safety": None,
+    }
+
+    try:
+        prj_mobile = data.get("projectDetailData", {}).get("prjMobileBean", {})
+        rating_bean = prj_mobile.get("ratingBean", {})
+        if rating_bean:
+            overall = rating_bean.get("psmAvgRt")
+            if overall:
+                ratings["overall"] = float(overall)
+
+            security = rating_bean.get("securityRt")
+            if security:
+                ratings["safety"] = float(security)
+
+            infra = rating_bean.get("prjInfraRt")
+            if infra:
+                ratings["connectivity"] = float(infra)
+
+            maint = rating_bean.get("prjMaintainanceRt")
+            if maint:
+                ratings["neighbourhood"] = float(maint)
+    except (ValueError, TypeError, AttributeError):
+        pass
+
+    return ratings
+
+
+def extract_listings_from_json(
+    data: dict,
+    project_id: str,
+    project_url: str,
+    city: str,
+    search_page: int,
+    raw_html_path: str,
+    collected_at: str | None,
+) -> list[dict]:
+    """Extract individual listing records from the parsed JSON."""
+    records = []
+
+    bhk_details = (
+        data.get("projectPageSeoStaticData", {})
+        .get("bhkDetailsDTO", {})
+        .get("bhkProjectDetailsMap", {})
+    )
+
+    all_data = bhk_details.get("ALL", {})
+    sale_listings = all_data.get("groupedResult") or []
+    rent_listings = all_data.get("groupedRentResult") or []
+
+    project_ratings = extract_project_ratings(data)
+
+    prj_mobile = data.get("projectDetailData", {}).get("prjMobileBean", {})
+    project_name = prj_mobile.get("opsmname")
+    dev_list = prj_mobile.get("projectDeveloperList")
+    developer_name = None
+    if isinstance(dev_list, list) and dev_list:
+        first_dev = dev_list[0]
+        if isinstance(first_dev, dict):
+            developer_name = first_dev.get("developerName")
+
+    for listing in sale_listings + rent_listings:
+        prop_id = listing.get("id")
+        if not prop_id:
+            continue
+
+        price = listing.get("price")
+        price_crore = None
+        if price and isinstance(price, (int, float)) and price > 0:
+            if price > 10000:
+                price_crore = price / 10000000
+            else:
+                price_crore = price / 100
+
+        price_display = listing.get("priceD")
+
+        bhk = None
+        bedroom_d = listing.get("bedroomD")
+        if bedroom_d:
+            try:
+                bhk = float(bedroom_d)
+            except (ValueError, TypeError):
+                pass
+
+        bathrooms = None
+        bath_d = listing.get("bathD")
+        if bath_d:
+            try:
+                bathrooms = float(bath_d)
+            except (ValueError, TypeError):
+                pass
+
+        balconies = None
+        balc_d = listing.get("balconiesD")
+        if balc_d:
+            try:
+                balconies = float(balc_d)
+            except (ValueError, TypeError):
+                pass
+
+        builtup_area = None
+        ca_sqft = (
+            listing.get("caSqFt") or listing.get("coveredArea") or listing.get("ca")
+        )
+        if ca_sqft:
+            try:
+                builtup_area = float(ca_sqft)
+            except (ValueError, TypeError):
+                pass
+
+        floor_no = None
+        floor_str = listing.get("floorNo")
+        if floor_str:
+            try:
+                floor_no = int(floor_str)
+            except (ValueError, TypeError):
+                pass
+
+        total_floors = None
+        floors_str = listing.get("floors")
+        if floors_str:
+            try:
+                total_floors = int(floors_str)
+            except (ValueError, TypeError):
+                pass
+
+        furnishing = listing.get("furnishedD")
+        possession_status = listing.get("possStatusD")
+        property_age = listing.get("acD")
+
+        locality = listing.get("locSeoName")
+        city_name = listing.get("ctName") or city
+
+        seo_desc = listing.get("seoDesc") or ""
+        auto_desc = listing.get("auto_desc") or ""
+        amenities_str = listing.get("amenities") or ""
+        ad_text = listing.get("ad_text") or ""
+        dtldesc = listing.get("dtldesc") or ""
+        plgdtldesc = listing.get("plgdtldesc") or ""
+
+        combined_text = " ".join(
+            filter(None, [seo_desc, auto_desc, amenities_str, ad_text, dtldesc, plgdtldesc])
+        )
+        vaastu_mentioned, vaastu_mentions_text = extract_vaastu_mentions(combined_text)
+
+        user_type = listing.get("userType")
+
+        title = None
+        if bhk and listing.get("propTypeD"):
+            title = f"{int(bhk)} BHK {listing.get('propTypeD')}"
+        elif auto_desc:
+            title = auto_desc[:100]
+
+        listing_url = listing.get("url") or project_url
+
+        record = ListingRecord(
+            property_id=str(prop_id),
+            project_id=project_id,
+            url=listing_url,
+            city=city_name,
+            search_page=search_page,
+            title=title,
+            locality=locality,
+            price_display=price_display,
+            price_crore=price_crore,
+            builtup_area_sqft=builtup_area,
+            carpet_area_sqft=None,
+            bhk=bhk,
+            bathrooms=bathrooms,
+            balconies=balconies,
+            furnishing=furnishing,
+            facing=None,
+            possession_status=possession_status,
+            property_age=property_age,
+            floor_no=floor_no,
+            total_floors=total_floors,
+            amenities=amenities_str if amenities_str else None,
+            description=seo_desc if seo_desc else None,
+            vaastu_mentioned=int(vaastu_mentioned),
+            vaastu_mentions_text=vaastu_mentions_text,
+            seller_type=user_type,
+            posted_date=None,
+            rating_overall=project_ratings["overall"],
+            rating_connectivity=project_ratings["connectivity"],
+            rating_neighbourhood=project_ratings["neighbourhood"],
+            rating_safety=project_ratings["safety"],
+            project_name=listing.get("prjname") or project_name,
+            developer_name=listing.get("devName") or developer_name,
+            collected_at=collected_at,
+            raw_html_path=raw_html_path,
+        )
+        records.append(asdict(record))
+
+    return records
 
 
 def parse_city(city: str, city_dir: Path, force: bool) -> dict:
@@ -357,25 +341,32 @@ def parse_city(city: str, city_dir: Path, force: bool) -> dict:
     detail_entries = [e for e in entries if e.get("type") == "detail"]
 
     if not detail_entries:
-        print(f"[{city}] No detail entries found in scrape_manifest.jsonl", file=sys.stderr)
+        print(
+            f"[{city}] No detail entries found in scrape_manifest.jsonl",
+            file=sys.stderr,
+        )
         return {"city": city, "parsed": 0, "skipped": 0, "errors": 0}
 
-    existing_ids = set() if force else read_existing_property_ids_parquet(parsed_parquet)
+    existing_ids = (
+        set() if force else read_existing_property_ids_parquet(parsed_parquet)
+    )
 
+    seen_project_ids = set()
     parsed_rows = []
     skipped = 0
     errors = 0
 
     for entry in detail_entries:
-        property_id = entry.get("property_id", "")
-        if property_id in existing_ids:
+        project_id = entry.get("property_id", "")
+
+        if project_id in seen_project_ids:
             skipped += 1
             continue
+        seen_project_ids.add(project_id)
 
         raw_path = entry.get("html_path", "")
         html_path = city_dir / raw_path
         if not html_path.exists():
-            # Try alternate path: raw/ -> pages/, and add .gz
             alt_path = raw_path.replace("raw/", "pages/")
             if not alt_path.endswith(".gz"):
                 alt_path += ".gz"
@@ -392,21 +383,41 @@ def parse_city(city: str, city_dir: Path, force: bool) -> dict:
             errors += 1
             continue
 
-        text = extract_text_from_html(html)
-
         try:
-            record = parse_detail_text(
-                text=text,
-                url=entry.get("url", ""),
+            data = extract_preloaded_state(html)
+            if not data:
+                print(
+                    f"[{city}] No SERVER_PRELOADED_STATE_ found in {project_id}",
+                    file=sys.stderr,
+                )
+                errors += 1
+                continue
+
+            records = extract_listings_from_json(
+                data=data,
+                project_id=project_id,
+                project_url=entry.get("url", ""),
                 city=city,
-                property_id=property_id,
                 search_page=entry.get("search_page", 0),
                 raw_html_path=entry.get("html_path", ""),
                 collected_at=entry.get("collected_at") or entry.get("timestamp"),
             )
-            parsed_rows.append(asdict(record))
+
+            if not records:
+                errors += 1
+                continue
+
+            for rec in records:
+                if rec["property_id"] not in existing_ids:
+                    parsed_rows.append(rec)
+                else:
+                    skipped += 1
+
         except Exception as e:
-            print(f"[{city}] Error parsing {property_id}: {e}", file=sys.stderr)
+            import traceback
+
+            print(f"[{city}] Error parsing {project_id}: {e}", file=sys.stderr)
+            traceback.print_exc()
             errors += 1
             continue
 
@@ -415,12 +426,21 @@ def parse_city(city: str, city_dir: Path, force: bool) -> dict:
             write_parquet(parsed_parquet, parsed_rows)
         else:
             import pandas as pd
-            existing_df = pd.read_parquet(parsed_parquet) if parsed_parquet.exists() else pd.DataFrame()
+
+            existing_df = (
+                pd.read_parquet(parsed_parquet)
+                if parsed_parquet.exists()
+                else pd.DataFrame()
+            )
             new_df = pd.DataFrame(parsed_rows)
             all_df = pd.concat([existing_df, new_df], ignore_index=True)
             all_df.to_parquet(parsed_parquet, index=False, compression="zstd")
 
-    print(f"[{city}] Parsed: {len(parsed_rows)}, Skipped: {skipped}, Errors: {errors}", file=sys.stderr)
+    print(
+        f"[{city}] Parsed: {len(parsed_rows)} listings, "
+        f"Skipped: {skipped}, Errors: {errors}",
+        file=sys.stderr,
+    )
 
     return {
         "city": city,
@@ -440,7 +460,10 @@ def main() -> None:
             raise SystemExit(f"Data directory not found: {data_dir}")
 
         city_dirs = [d for d in data_dir.iterdir() if d.is_dir()]
-        print(f"Parsing {len(city_dirs)} cities: {[d.name for d in city_dirs]}", file=sys.stderr)
+        print(
+            f"Parsing {len(city_dirs)} cities: {[d.name for d in city_dirs]}",
+            file=sys.stderr,
+        )
 
         all_summaries = []
         for city_dir in sorted(city_dirs):
@@ -452,8 +475,11 @@ def main() -> None:
 
         total_parsed = sum(s["parsed"] for s in all_summaries)
         total_errors = sum(s["errors"] for s in all_summaries)
-        print(f"\n=== Parsing complete ===", file=sys.stderr)
-        print(f"Cities: {len(all_summaries)}, Parsed: {total_parsed}, Errors: {total_errors}", file=sys.stderr)
+        print("\n=== Parsing complete ===", file=sys.stderr)
+        print(
+            f"Cities: {len(all_summaries)}, Parsed: {total_parsed}, Errors: {total_errors}",
+            file=sys.stderr,
+        )
     else:
         city_dir = data_dir / slugify(args.city)
         if not city_dir.exists():

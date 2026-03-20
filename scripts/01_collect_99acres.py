@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Collect 99acres.com listings for independent houses and flats.
+"""Scrape 99acres.com property listings (raw HTML only, gzip compressed).
 
-The script is designed for a cautious, reproducible workflow:
+This script collects raw pages WITHOUT parsing. Parsing is done by 02_parse_99acres.py.
 
+Workflow:
 1. Check robots.txt before each fetch.
-2. Save raw HTML and raw body text for every page.
-3. Extract embedded JSON data (__NEXT_DATA__) when available.
-4. Parse a conservative set of fields from listing-detail text.
-5. Emit a normalized CSV/JSONL that can feed the analysis pipeline.
+2. Paginate through search results, save HTML as .html.gz.
+3. Extract detail page links from search pages.
+4. Visit each detail page, save HTML as .html.gz.
+5. Output: scrape_manifest.jsonl tracking what was scraped.
 
 Notes
 -----
@@ -18,28 +19,23 @@ Notes
 
 Example
 -------
-python scripts/01_collect_99acres.py \
-    --city gurgaon \
-    --property-type both \
-    --max-pages 5 \
-    --max-detail-pages 200
-
+python scripts/01_collect_99acres.py --city gurgaon --property-type both --max-pages 5
 python scripts/01_collect_99acres.py --all-cities --property-type house --max-pages 3
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
+import gzip
 import json
 import random
 import re
 import sys
 import time
-from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-from urllib.parse import urljoin, urlparse
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urljoin, urlparse, urlsplit
 from urllib.robotparser import RobotFileParser
 
 try:
@@ -56,38 +52,8 @@ USER_AGENT = (
 )
 DOMAIN = "https://www.99acres.com"
 
-
-@dataclass
-class ListingRecord:
-    property_id: str
-    url: str
-    city: str
-    property_type: str
-    search_page: int
-    title: Optional[str]
-    locality: Optional[str]
-    price_display: Optional[str]
-    price_crore: Optional[float]
-    builtup_area_sqft: Optional[float]
-    carpet_area_sqft: Optional[float]
-    bhk: Optional[float]
-    bathrooms: Optional[float]
-    balconies: Optional[float]
-    furnishing: Optional[str]
-    facing: Optional[str]
-    possession_status: Optional[str]
-    floor_number: Optional[int]
-    total_floors: Optional[int]
-    property_age: Optional[str]
-    amenities: Optional[str]
-    description: Optional[str]
-    vaastu_mentioned: int
-    vaastu_mentions_text: Optional[str]
-    seller_type: Optional[str]
-    posted_date: Optional[str]
-    last_updated: Optional[str]
-    raw_text_path: str
-    raw_html_path: str
+MAX_RETRIES = 3
+BACKOFF_BASE = 2.0
 
 
 def project_root_from_here() -> Path:
@@ -118,7 +84,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Directory for raw pages and parsed outputs. Defaults to data/raw/99acres/<city>",
+        help="Directory for raw pages. Defaults to data/raw/99acres/<city>",
     )
     parser.add_argument("--max-pages", type=int, default=5, help="Number of search-result pages to visit")
     parser.add_argument(
@@ -138,24 +104,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="Skip detail pages whose parsed rows already exist in parsed_listings.csv",
-    )
-    parser.add_argument(
-        "--skip-kaggle-ids",
-        action="store_true",
-        help="Skip property IDs already present in Kaggle datasets (arvanshul, campusx)",
+        help="Skip URLs already in scrape_manifest.jsonl",
     )
     parser.add_argument(
         "--proxy",
         help="Proxy server URL (e.g., http://user:pass@host:port)",
     )
     return parser.parse_args()
-
-
-def normalize_ws(text: Optional[str]) -> str:
-    if not text:
-        return ""
-    return re.sub(r"\s+", " ", text).strip()
 
 
 def slugify(text: str) -> str:
@@ -177,6 +132,19 @@ def load_city_config(path: Path) -> Dict[str, Dict[str, str]]:
     return data
 
 
+def parse_proxy_url(proxy_url: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not proxy_url:
+        return None
+    parsed = urlsplit(proxy_url)
+    scheme = parsed.scheme or "http"
+    config: Dict[str, Any] = {"server": f"{scheme}://{parsed.hostname}:{parsed.port}"}
+    if parsed.username:
+        config["username"] = parsed.username
+    if parsed.password:
+        config["password"] = parsed.password
+    return config
+
+
 class RobotsGuard:
     def __init__(
         self, root_url: str, user_agent: str = USER_AGENT, proxy: Optional[str] = None
@@ -190,19 +158,19 @@ class RobotsGuard:
         self._fetch_robots_with_playwright()
 
     def _fetch_robots_with_playwright(self) -> None:
-        """Fetch robots.txt using Playwright since some sites block urllib."""
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=False,
                     args=["--disable-blink-features=AutomationControlled"]
                 )
-                proxy_config = {"server": self.proxy} if self.proxy else None
+                proxy_config = parse_proxy_url(self.proxy)
                 context = browser.new_context(
                     user_agent=self.user_agent,
                     locale="en-IN",
                     timezone_id="Asia/Kolkata",
-                    proxy=proxy_config,
+                    proxy=proxy_config,  # type: ignore[arg-type]
+                    ignore_https_errors=bool(proxy_config),
                 )
                 page = context.new_page()
                 page.goto(f"{self.root_url}/robots.txt", wait_until="domcontentloaded")
@@ -221,34 +189,8 @@ class RobotsGuard:
             return True
         return self.rp.can_fetch(self.user_agent, url)
 
-    def assert_allowed(self, url: str) -> None:
-        allowed = self.is_allowed(url)
-        if not allowed:
-            raise PermissionError(f"robots.txt disallows fetch: {url}")
 
-
-RE_PRICE_UNIT = re.compile(r"₹?\s*([0-9][\d,]*(?:\.\d+)?)\s*(Cr|Crore|L|Lac|Lakh|Lakhs|K)?\b", re.I)
-RE_BHK = re.compile(r"(\d+(?:\.\d+)?)\s*BHK\b", re.I)
-RE_SQFT = re.compile(r"([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft|square feet)\b", re.I)
-RE_BATH = re.compile(r"(\d+(?:\.\d+)?)\s*(?:Bath|Bathroom)s?\b", re.I)
-RE_BALCONY = re.compile(r"(\d+(?:\.\d+)?)\s*Balcon(?:y|ies)\b", re.I)
-RE_FLOOR = re.compile(r"(?:Floor|Storey)\s*:?\s*(\d+)\s*(?:of|out of|/)?\s*(\d+)?", re.I)
-RE_LAST_UPDATED = re.compile(r"(?:Posted|Updated|Last updated):?\s*(.+?)(?:\||$)", re.I)
-RE_POSTED_DATE = re.compile(r"Posted\s*(?:on)?\s*:?\s*(.+?)(?:\||$)", re.I)
-RE_POSSESSION = re.compile(
-    r"\b(Ready to move|Ready to Move|Under Construction|Resale|New Launch|Immediately|Possession Started|New Property)\b",
-    re.I,
-)
-RE_FACING = re.compile(
-    r"\b(North(?:[- ]?East|[- ]?West)?|South(?:[- ]?East|[- ]?West)?|East|West)\s*(?:Facing)?\b",
-    re.I,
-)
-RE_FURNISHING = re.compile(r"\b(Unfurnished|Semi[- ]?Furnished|Fully[- ]?Furnished|Furnished)\b", re.I)
-RE_VAASTU = re.compile(r"\bvaa?stu\b|\bvastu\b", re.I)
 RE_PROPERTY_ID = re.compile(r"spid-([A-Z]?\d{7,})")
-RE_SELLER_TYPE = re.compile(r"\b(Owner|Agent|Builder|Dealer)\b", re.I)
-RE_PROPERTY_AGE = re.compile(r"(?:Age|Property Age|Years Old)\s*:?\s*([^|,\n]+)", re.I)
-RE_AMENITIES_SECTION = re.compile(r"(?:Amenities|Features)\s*:?\s*", re.I)
 
 
 def jitter_sleep(lo: float, hi: float) -> None:
@@ -257,12 +199,7 @@ def jitter_sleep(lo: float, hi: float) -> None:
     time.sleep(random.uniform(max(0.0, lo), max(lo, hi)))
 
 
-MAX_RETRIES = 3
-BACKOFF_BASE = 2.0
-
-
 def is_blocked_response(html: str, text: str) -> bool:
-    """Detect 429/403 or blocking patterns in page content."""
     blocked_patterns = [
         "access denied",
         "too many requests",
@@ -284,10 +221,6 @@ def fetch_with_retry(
     wait_ms: int = 3000,
     max_retries: int = MAX_RETRIES,
 ) -> Tuple[str, str, bool]:
-    """Fetch a page with retry logic and backoff on failures/blocks.
-
-    Returns (html, text, success).
-    """
     for attempt in range(max_retries):
         try:
             page.goto(url, wait_until="domcontentloaded")
@@ -310,82 +243,12 @@ def fetch_with_retry(
     return "", "", False
 
 
-def price_to_crore(raw: Optional[str]) -> Optional[float]:
-    if not raw:
-        return None
-    raw = normalize_ws(raw)
-    if "price on request" in raw.lower() or "por" in raw.lower():
-        return None
-    m = RE_PRICE_UNIT.search(raw)
-    if not m:
-        return None
-    value = float(m.group(1).replace(",", ""))
-    unit = (m.group(2) or "").lower()
-    if unit in {"cr", "crore"}:
-        return value
-    if unit in {"l", "lac", "lakh", "lakhs"}:
-        return value / 100.0
-    if unit == "k":
-        return value / 100000.0
-    if value > 10000000:
-        return value / 10000000.0
-    return None
-
-
-def number_from_match(pattern: re.Pattern[str], text: str) -> Optional[float]:
-    m = pattern.search(text)
-    if not m:
-        return None
-    return float(m.group(1).replace(",", ""))
-
-
-def extract_lines(text: str) -> List[str]:
-    lines = [normalize_ws(x) for x in text.splitlines()]
-    return [x for x in lines if x]
-
-
-def normalize_direction(text: Optional[str]) -> Optional[str]:
-    if not text:
-        return None
-    text = text.replace(" ", "-").replace("--", "-")
-    mapping = {
-        "North-East": "North-East",
-        "NorthEast": "North-East",
-        "North-West": "North-West",
-        "NorthWest": "North-West",
-        "South-East": "South-East",
-        "SouthEast": "South-East",
-        "South-West": "South-West",
-        "SouthWest": "South-West",
-        "North": "North",
-        "South": "South",
-        "East": "East",
-        "West": "West",
-    }
-    for key, val in mapping.items():
-        if key.lower() in text.lower():
-            return val
-    return normalize_ws(text)
-
-
 def property_id_from_url(url: str) -> str:
     m = RE_PROPERTY_ID.search(url)
     if m:
         return m.group(1)
     stem = Path(urlparse(url).path).name
     return slugify(stem)
-
-
-def extract_next_data(html: str) -> Optional[Dict[str, Any]]:
-    """Extract __NEXT_DATA__ JSON from page if present."""
-    pattern = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
-    m = pattern.search(html)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(1))
-    except json.JSONDecodeError:
-        return None
 
 
 def extract_detail_links(hrefs: Iterable[str], root_url: str) -> List[str]:
@@ -407,270 +270,9 @@ def extract_detail_links(hrefs: Iterable[str], root_url: str) -> List[str]:
     return out
 
 
-def parse_detail_from_next_data(
-    next_data: Dict[str, Any],
-    url: str,
-    city: str,
-    property_type: str,
-    search_page: int,
-    raw_text_path: str,
-    raw_html_path: str,
-) -> Optional[ListingRecord]:
-    """Parse listing from __NEXT_DATA__ if available."""
-    try:
-        props = next_data.get("props", {})
-        page_props = props.get("pageProps", {})
-        listing_data = page_props.get("listingData", {}) or page_props.get("propertyData", {}) or {}
-        if not listing_data:
-            return None
-
-        property_id = str(listing_data.get("id", "")) or property_id_from_url(url)
-        title = listing_data.get("title") or listing_data.get("heading")
-        locality = listing_data.get("locality") or listing_data.get("localityName")
-        price_display = listing_data.get("price") or listing_data.get("priceDisplay")
-        price_crore = None
-        if isinstance(price_display, (int, float)):
-            price_crore = price_display / 10000000.0
-        elif isinstance(price_display, str):
-            price_crore = price_to_crore(price_display)
-
-        builtup = listing_data.get("builtUpArea") or listing_data.get("superBuiltupArea")
-        carpet = listing_data.get("carpetArea")
-        bhk = listing_data.get("bhk") or listing_data.get("bedroom")
-        bathrooms = listing_data.get("bathroom")
-        balconies = listing_data.get("balcony")
-        furnishing = listing_data.get("furnishing")
-        facing = listing_data.get("facing")
-        floor_num = listing_data.get("floor") or listing_data.get("floorNumber")
-        total_floors = listing_data.get("totalFloor")
-        possession = listing_data.get("possession") or listing_data.get("possessionStatus")
-        age = listing_data.get("propertyAge") or listing_data.get("age")
-        amenities = listing_data.get("amenities")
-        if isinstance(amenities, list):
-            amenities = ", ".join(str(a) for a in amenities)
-        description = listing_data.get("description") or listing_data.get("about")
-        seller = listing_data.get("sellerType") or listing_data.get("postedBy")
-        posted = listing_data.get("postedDate") or listing_data.get("createdAt")
-        updated = listing_data.get("updatedAt") or listing_data.get("lastUpdated")
-
-        all_text = json.dumps(listing_data, ensure_ascii=False).lower()
-        vaastu_mentioned = 1 if RE_VAASTU.search(all_text) else 0
-        vaastu_text = None
-        if vaastu_mentioned:
-            chunks = []
-            if description and RE_VAASTU.search(description):
-                chunks.append(description)
-            if title and RE_VAASTU.search(title):
-                chunks.append(title)
-            vaastu_text = " || ".join(chunks) if chunks else "vaastu mentioned in listing data"
-
-        return ListingRecord(
-            property_id=property_id,
-            url=url,
-            city=city,
-            property_type=property_type,
-            search_page=search_page,
-            title=title,
-            locality=locality,
-            price_display=str(price_display) if price_display else None,
-            price_crore=price_crore,
-            builtup_area_sqft=float(builtup) if builtup else None,
-            carpet_area_sqft=float(carpet) if carpet else None,
-            bhk=float(bhk) if bhk else None,
-            bathrooms=float(bathrooms) if bathrooms else None,
-            balconies=float(balconies) if balconies else None,
-            furnishing=furnishing,
-            facing=normalize_direction(facing) if facing else None,
-            possession_status=possession,
-            floor_number=int(floor_num) if floor_num else None,
-            total_floors=int(total_floors) if total_floors else None,
-            property_age=str(age) if age else None,
-            amenities=amenities,
-            description=description,
-            vaastu_mentioned=vaastu_mentioned,
-            vaastu_mentions_text=vaastu_text,
-            seller_type=seller,
-            posted_date=str(posted) if posted else None,
-            last_updated=str(updated) if updated else None,
-            raw_text_path=raw_text_path,
-            raw_html_path=raw_html_path,
-        )
-    except Exception:
-        return None
-
-
-def parse_detail_from_text(
-    text: str,
-    url: str,
-    city: str,
-    property_type: str,
-    search_page: int,
-    raw_text_path: str,
-    raw_html_path: str,
-) -> ListingRecord:
-    """Fallback parser using text extraction."""
-    lines = extract_lines(text)
-    all_text = "\n".join(lines)
-
-    property_id = property_id_from_url(url)
-
-    title = None
-    for line in lines:
-        line_lower = line.lower()
-        if RE_BHK.search(line) and ("house" in line_lower or "flat" in line_lower or "villa" in line_lower or "apartment" in line_lower):
-            title = line
-            break
-
-    locality = None
-    for line in lines:
-        line_lower = line.lower()
-        if "address" in line_lower:
-            continue
-        if ("sector" in line_lower or ", " in line) and not "₹" in line:
-            if not RE_PRICE_UNIT.search(line) and len(line) < 100:
-                locality = line
-                break
-
-    price_display = None
-    price_crore = None
-    for line in lines:
-        if "₹" in line and ("cr" in line.lower() or "lac" in line.lower() or "lakh" in line.lower()):
-            price_display = line
-            price_crore = price_to_crore(line)
-            break
-        if "price on request" in line.lower():
-            price_display = "Price on Request"
-            break
-
-    bhk = number_from_match(RE_BHK, all_text)
-    bathrooms = number_from_match(RE_BATH, all_text)
-    balconies = number_from_match(RE_BALCONY, all_text)
-
-    builtup = None
-    carpet = None
-    sqft_matches = RE_SQFT.findall(all_text)
-    if sqft_matches:
-        builtup = float(sqft_matches[0].replace(",", ""))
-        if len(sqft_matches) > 1:
-            carpet = float(sqft_matches[1].replace(",", ""))
-
-    facing = None
-    m = RE_FACING.search(all_text)
-    if m:
-        facing = normalize_direction(m.group(1))
-
-    furnishing = None
-    m = RE_FURNISHING.search(all_text)
-    if m:
-        furnishing = normalize_ws(m.group(1))
-
-    possession = None
-    m = RE_POSSESSION.search(all_text)
-    if m:
-        possession = normalize_ws(m.group(1))
-
-    floor_num = None
-    total_floors = None
-    m = RE_FLOOR.search(all_text)
-    if m:
-        floor_num = int(m.group(1))
-        if m.group(2):
-            total_floors = int(m.group(2))
-
-    age = None
-    m = RE_PROPERTY_AGE.search(all_text)
-    if m:
-        age = normalize_ws(m.group(1))
-
-    seller = None
-    m = RE_SELLER_TYPE.search(all_text)
-    if m:
-        seller = normalize_ws(m.group(1))
-
-    posted = None
-    m = RE_POSTED_DATE.search(all_text)
-    if m:
-        posted = normalize_ws(m.group(1))
-
-    updated = None
-    m = RE_LAST_UPDATED.search(all_text)
-    if m:
-        updated = normalize_ws(m.group(1))
-
-    description = None
-    for i, line in enumerate(lines):
-        if "about" in line.lower() and "property" in line.lower():
-            desc_lines = []
-            for j in range(i + 1, min(i + 20, len(lines))):
-                if any(stop in lines[j].lower() for stop in ["amenities", "features", "specifications", "overview"]):
-                    break
-                desc_lines.append(lines[j])
-            if desc_lines:
-                description = " ".join(desc_lines)
-            break
-
-    amenities = None
-    for i, line in enumerate(lines):
-        if RE_AMENITIES_SECTION.search(line):
-            amen_lines = []
-            for j in range(i + 1, min(i + 30, len(lines))):
-                if any(stop in lines[j].lower() for stop in ["about", "description", "overview", "contact"]):
-                    break
-                amen_lines.append(lines[j])
-            if amen_lines:
-                amenities = " | ".join(amen_lines)
-            break
-
-    vaastu_mentioned = 1 if RE_VAASTU.search(all_text) else 0
-    vaastu_text = None
-    if vaastu_mentioned:
-        chunks = []
-        for line in lines:
-            if RE_VAASTU.search(line):
-                chunks.append(line)
-        vaastu_text = " || ".join(dict.fromkeys(chunks)) if chunks else None
-
-    return ListingRecord(
-        property_id=property_id,
-        url=url,
-        city=city,
-        property_type=property_type,
-        search_page=search_page,
-        title=title,
-        locality=locality,
-        price_display=price_display,
-        price_crore=price_crore,
-        builtup_area_sqft=builtup,
-        carpet_area_sqft=carpet,
-        bhk=bhk,
-        bathrooms=bathrooms,
-        balconies=balconies,
-        furnishing=furnishing,
-        facing=facing,
-        possession_status=possession,
-        floor_number=floor_num,
-        total_floors=total_floors,
-        property_age=age,
-        amenities=amenities,
-        description=description,
-        vaastu_mentioned=vaastu_mentioned,
-        vaastu_mentions_text=vaastu_text,
-        seller_type=seller,
-        posted_date=posted,
-        last_updated=updated,
-        raw_text_path=raw_text_path,
-        raw_html_path=raw_html_path,
-    )
-
-
-def save_text(path: Path, text: str) -> None:
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(text)
-
-
-def save_json(path: Path, payload: dict) -> None:
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=2, ensure_ascii=False)
+def save_html_gz(path: Path, html: str) -> None:
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        fh.write(html)
 
 
 def append_jsonl(path: Path, rows: Iterable[dict]) -> None:
@@ -679,238 +281,37 @@ def append_jsonl(path: Path, rows: Iterable[dict]) -> None:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def append_csv(path: Path, rows: Iterable[dict], fieldnames: Sequence[str]) -> None:
-    exists = path.exists()
-    with open(path, "a", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        if not exists:
-            writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
-def read_existing_property_ids(parsed_csv: Path) -> set[str]:
-    if not parsed_csv.exists():
+def load_scraped_urls(manifest_path: Path) -> set[str]:
+    if not manifest_path.exists():
         return set()
-    import pandas as pd
-
-    try:
-        df = pd.read_csv(parsed_csv, dtype={"property_id": str})
-    except Exception:
-        return set()
-    return set(df["property_id"].dropna().astype(str))
-
-
-def load_kaggle_property_ids(root: Path) -> set[str]:
-    """Load property IDs from Kaggle datasets to avoid re-scraping."""
-    import pandas as pd
-
-    ids: set[str] = set()
-    kaggle_dir = root / "data" / "raw" / "99acres_kaggle"
-    if not kaggle_dir.exists():
-        return ids
-
-    arvanshul_dir = kaggle_dir / "arvanshul"
-    if arvanshul_dir.exists():
-        for csv_file in arvanshul_dir.glob("*.csv"):
+    urls = set()
+    with open(manifest_path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
             try:
-                df = pd.read_csv(csv_file, usecols=["PROP_ID"], dtype={"PROP_ID": str})
-                ids.update(df["PROP_ID"].dropna().astype(str))
-            except Exception:
-                pass
-
-    campusx_dir = root / "data" / "raw" / "99acres_campusx"
-    if campusx_dir.exists():
-        for csv_file in campusx_dir.glob("*.csv"):
-            try:
-                df = pd.read_csv(csv_file, low_memory=False)
-                if "property_id" in df.columns:
-                    ids.update(df["property_id"].dropna().astype(str))
-            except Exception:
-                pass
-
-    return ids
+                entry = json.loads(line)
+                if "url" in entry:
+                    urls.add(entry["url"])
+            except json.JSONDecodeError:
+                continue
+    return urls
 
 
-def get_fieldnames() -> List[str]:
-    return list(asdict(ListingRecord(
-        property_id="",
-        url="",
-        city="",
-        property_type="",
-        search_page=0,
-        title=None,
-        locality=None,
-        price_display=None,
-        price_crore=None,
-        builtup_area_sqft=None,
-        carpet_area_sqft=None,
-        bhk=None,
-        bathrooms=None,
-        balconies=None,
-        furnishing=None,
-        facing=None,
-        possession_status=None,
-        floor_number=None,
-        total_floors=None,
-        property_age=None,
-        amenities=None,
-        description=None,
-        vaastu_mentioned=0,
-        vaastu_mentions_text=None,
-        seller_type=None,
-        posted_date=None,
-        last_updated=None,
-        raw_text_path="",
-        raw_html_path="",
-    )).keys())
-
-
-def collect_property_type(
-    city: str,
-    base_url: str,
-    property_type: str,
-    outdir: Path,
-    args: argparse.Namespace,
-    guard: RobotsGuard,
-    fieldnames: List[str],
-    page,
-    existing_ids: set[str],
-) -> Tuple[List[dict], int]:
-    """Collect listings for a single property type."""
-    raw_search = ensure_dir(outdir / "raw" / "search")
-    raw_detail = ensure_dir(outdir / "raw" / "detail")
-
-    parsed_csv = outdir / "parsed_listings.csv"
-    parsed_jsonl = outdir / "parsed_listings.jsonl"
-    search_manifest = outdir / "search_pages.jsonl"
-
-    detail_links: List[Tuple[str, int]] = []
-
-    for pageno in range(1, args.max_pages + 1):
-        url = f"{base_url}&page={pageno}" if "?" in base_url else f"{base_url}?page={pageno}"
-        if not guard.is_allowed(url):
-            print(f"  [SKIP] robots.txt disallows: {url}", file=sys.stderr)
-            continue
-
-        print(f"  [{property_type}] Fetching search page {pageno}...", file=sys.stderr)
-        html, text, success = fetch_with_retry(page, url, wait_ms=3000)
-        if not success:
-            print(f"  [ERROR] Failed to load search page {pageno} after retries", file=sys.stderr)
-            continue
-        hrefs = page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
-
-        html_path = raw_search / f"{slugify(city)}_{property_type}_p{pageno}.html"
-        text_path = raw_search / f"{slugify(city)}_{property_type}_p{pageno}.txt"
-        save_text(html_path, html)
-        save_text(text_path, text)
-
-        links = extract_detail_links(hrefs, base_url)
-        detail_links.extend((u, pageno) for u in links)
-
-        append_jsonl(
-            search_manifest,
-            [
-                {
-                    "city": city,
-                    "property_type": property_type,
-                    "page": pageno,
-                    "search_url": url,
-                    "n_detail_links_found": len(links),
-                    "raw_html_path": str(html_path.relative_to(outdir)),
-                    "raw_text_path": str(text_path.relative_to(outdir)),
-                }
-            ],
-        )
-        jitter_sleep(args.min_sleep, args.max_sleep)
-
-    seen: set[str] = set()
-    unique_links: List[Tuple[str, int]] = []
-    for url, pageno in detail_links:
-        if url in seen:
-            continue
-        seen.add(url)
-        unique_links.append((url, pageno))
-
-    if args.max_detail_pages > 0:
-        unique_links = unique_links[: args.max_detail_pages]
-
-    parsed_rows: List[dict] = []
-    for idx, (url, search_page) in enumerate(unique_links, start=1):
-        pid = property_id_from_url(url)
-        if args.resume and pid in existing_ids:
-            continue
-
-        if not guard.is_allowed(url):
-            print(f"  [SKIP] robots.txt disallows: {url}", file=sys.stderr)
-            continue
-
-        print(f"  [{property_type}] Fetching detail {idx}/{len(unique_links)}: {pid}", file=sys.stderr)
-        html, text, success = fetch_with_retry(page, url, wait_ms=2000)
-        if not success:
-            print(f"  [ERROR] Failed to load detail page {pid} after retries", file=sys.stderr)
-            continue
-
-        html_path = raw_detail / f"{slugify(city)}_{property_type}_{pid}.html"
-        text_path = raw_detail / f"{slugify(city)}_{property_type}_{pid}.txt"
-        save_text(html_path, html)
-        save_text(text_path, text)
-
-        next_data = extract_next_data(html)
-        record = None
-        if next_data:
-            record = parse_detail_from_next_data(
-                next_data=next_data,
-                url=url,
-                city=city,
-                property_type=property_type,
-                search_page=search_page,
-                raw_text_path=str(text_path.relative_to(outdir)),
-                raw_html_path=str(html_path.relative_to(outdir)),
-            )
-
-        if not record:
-            record = parse_detail_from_text(
-                text=text,
-                url=url,
-                city=city,
-                property_type=property_type,
-                search_page=search_page,
-                raw_text_path=str(text_path.relative_to(outdir)),
-                raw_html_path=str(html_path.relative_to(outdir)),
-            )
-
-        row = asdict(record)
-        parsed_rows.append(row)
-        append_csv(parsed_csv, [row], fieldnames=fieldnames)
-        append_jsonl(parsed_jsonl, [row])
-
-        if idx % 10 == 0:
-            print(f"  [{property_type}] Parsed {idx} detail pages...", file=sys.stderr)
-
-        jitter_sleep(args.min_sleep, args.max_sleep)
-
-    return parsed_rows, len(unique_links)
-
-
-def collect_city(
+def scrape_city(
     city: str,
     city_urls: Dict[str, str],
     outdir: Path,
     args: argparse.Namespace,
     guard: RobotsGuard,
-    fieldnames: List[str],
-    kaggle_ids: set[str],
 ) -> dict:
-    meta_dir = ensure_dir(outdir / "meta")
+    pages_search = ensure_dir(outdir / "pages" / "search")
+    pages_detail = ensure_dir(outdir / "pages" / "detail")
     ensure_dir(outdir)
 
-    parsed_csv = outdir / "parsed_listings.csv"
-    existing_ids = read_existing_property_ids(parsed_csv) if args.resume else set()
-
-    if args.skip_kaggle_ids:
-        existing_ids.update(kaggle_ids)
-        print(f"  Skipping {len(kaggle_ids)} Kaggle property IDs", file=sys.stderr)
+    manifest_path = outdir / "scrape_manifest.jsonl"
+    scraped_urls = load_scraped_urls(manifest_path) if args.resume else set()
 
     property_types = []
     if args.property_type in ("house", "both"):
@@ -918,8 +319,8 @@ def collect_city(
     if args.property_type in ("flat", "both"):
         property_types.append("flat")
 
-    all_rows: List[dict] = []
-    totals_by_type: Dict[str, int] = {}
+    search_pages_scraped = 0
+    detail_pages_scraped = 0
 
     with sync_playwright() as p:
         try:
@@ -936,13 +337,14 @@ def collect_city(
                 "Chromium did not launch. Install it with: playwright install chromium"
             ) from exc
 
-        proxy_config = {"server": args.proxy} if args.proxy else None
+        proxy_config = parse_proxy_url(args.proxy)
         context = browser.new_context(
             user_agent=USER_AGENT,
             viewport={"width": 1440, "height": 900},
             locale="en-IN",
             timezone_id="Asia/Kolkata",
-            proxy=proxy_config,
+            proxy=proxy_config,  # type: ignore[arg-type]
+            ignore_https_errors=bool(proxy_config),
         )
         page = context.new_page()
         page.set_default_timeout(args.timeout_ms)
@@ -955,34 +357,105 @@ def collect_city(
             base_url = city_urls[prop_type]
             print(f"  Collecting {prop_type} listings from {city}...", file=sys.stderr)
 
-            rows, n_detail = collect_property_type(
-                city=city,
-                base_url=base_url,
-                property_type=prop_type,
-                outdir=outdir,
-                args=args,
-                guard=guard,
-                fieldnames=fieldnames,
-                page=page,
-                existing_ids=existing_ids,
-            )
-            all_rows.extend(rows)
-            totals_by_type[prop_type] = n_detail
-            existing_ids.update(r["property_id"] for r in rows)
+            detail_links: List[Tuple[str, int]] = []
+
+            for pageno in range(1, args.max_pages + 1):
+                url = f"{base_url}&page={pageno}" if "?" in base_url else f"{base_url}?page={pageno}"
+
+                if args.resume and url in scraped_urls:
+                    continue
+
+                if not guard.is_allowed(url):
+                    print(f"  [SKIP] robots.txt disallows: {url}", file=sys.stderr)
+                    continue
+
+                print(f"  [{prop_type}] Fetching search page {pageno}...", file=sys.stderr)
+                html, _, success = fetch_with_retry(page, url, wait_ms=3000)
+                if not success:
+                    print(f"  [ERROR] Failed to load search page {pageno} after retries", file=sys.stderr)
+                    continue
+
+                hrefs = page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
+
+                html_path = pages_search / f"{slugify(city)}_{prop_type}_p{pageno}.html.gz"
+                save_html_gz(html_path, html)
+
+                links = extract_detail_links(hrefs, base_url)
+                detail_links.extend((u, pageno) for u in links)
+                search_pages_scraped += 1
+
+                append_jsonl(manifest_path, [{
+                    "type": "search",
+                    "city": city,
+                    "property_type": prop_type,
+                    "page": pageno,
+                    "url": url,
+                    "html_path": str(html_path.relative_to(outdir)),
+                    "n_detail_links": len(links),
+                    "collected_at": datetime.now(timezone.utc).isoformat(),
+                }])
+
+                jitter_sleep(args.min_sleep, args.max_sleep)
+
+            seen: set[str] = set()
+            unique_links: List[Tuple[str, int]] = []
+            for url, pageno in detail_links:
+                pid = property_id_from_url(url)
+                if pid in seen:
+                    continue
+                seen.add(pid)
+                unique_links.append((url, pageno))
+
+            if args.max_detail_pages > 0:
+                unique_links = unique_links[: args.max_detail_pages]
+
+            print(f"  [{prop_type}] Found {len(unique_links)} unique detail URLs to fetch", file=sys.stderr)
+
+            for idx, (url, search_page) in enumerate(unique_links, start=1):
+                if args.resume and url in scraped_urls:
+                    continue
+
+                if not guard.is_allowed(url):
+                    print(f"  [SKIP] robots.txt disallows: {url}", file=sys.stderr)
+                    continue
+
+                pid = property_id_from_url(url)
+                print(f"  [{prop_type}] Fetching detail {idx}/{len(unique_links)}: {pid}", file=sys.stderr)
+
+                html, _, success = fetch_with_retry(page, url, wait_ms=2000)
+                if not success:
+                    print(f"  [ERROR] Failed to load detail page {pid} after retries", file=sys.stderr)
+                    continue
+
+                html_path = pages_detail / f"{slugify(city)}_{prop_type}_{pid}.html.gz"
+                save_html_gz(html_path, html)
+                detail_pages_scraped += 1
+
+                append_jsonl(manifest_path, [{
+                    "type": "detail",
+                    "city": city,
+                    "property_type": prop_type,
+                    "property_id": pid,
+                    "url": url,
+                    "html_path": str(html_path.relative_to(outdir)),
+                    "search_page": search_page,
+                    "collected_at": datetime.now(timezone.utc).isoformat(),
+                }])
+
+                if idx % 25 == 0:
+                    print(f"  [{prop_type}] Scraped {idx} detail pages...", file=sys.stderr)
+
+                jitter_sleep(args.min_sleep, args.max_sleep)
 
         browser.close()
 
-    summary = {
+    return {
         "city": city,
         "property_types": property_types,
-        "n_search_pages_fetched": args.max_pages,
-        "detail_urls_by_type": totals_by_type,
-        "n_rows_written_this_run": len(all_rows),
-        "parsed_csv": str((outdir / "parsed_listings.csv").relative_to(outdir)),
-        "parsed_jsonl": str((outdir / "parsed_listings.jsonl").relative_to(outdir)),
+        "search_pages_scraped": search_pages_scraped,
+        "detail_pages_scraped": detail_pages_scraped,
+        "manifest_path": str(manifest_path),
     }
-    save_json(meta_dir / "run_summary.json", summary)
-    return summary
 
 
 def main() -> None:
@@ -992,13 +465,6 @@ def main() -> None:
     root = project_root_from_here()
     config = load_city_config(Path(args.config))
     guard = RobotsGuard(DOMAIN, proxy=args.proxy)
-    fieldnames = get_fieldnames()
-
-    kaggle_ids: set[str] = set()
-    if args.skip_kaggle_ids:
-        print("Loading Kaggle property IDs for deduplication...", file=sys.stderr)
-        kaggle_ids = load_kaggle_property_ids(root)
-        print(f"  Found {len(kaggle_ids)} existing property IDs", file=sys.stderr)
 
     if args.all_cities:
         cities_to_collect = list(config.keys())
@@ -1017,20 +483,20 @@ def main() -> None:
             city_urls = config[city]
             outdir = root / "data" / "raw" / "99acres" / slugify(city)
             print(f"\n=== Collecting {city} ===", file=sys.stderr)
-            summary = collect_city(city, city_urls, outdir, args, guard, fieldnames, kaggle_ids)
+            summary = scrape_city(city, city_urls, outdir, args, guard)
             all_summaries.append(summary)
             print(json.dumps(summary, indent=2))
 
-        total_rows = sum(s["n_rows_written_this_run"] for s in all_summaries)
+        total_detail = sum(s["detail_pages_scraped"] for s in all_summaries)
         print(f"\n=== Collection complete ===", file=sys.stderr)
-        print(f"Cities: {len(all_summaries)}, Total rows: {total_rows}", file=sys.stderr)
+        print(f"Cities: {len(all_summaries)}, Total detail pages: {total_detail}", file=sys.stderr)
     else:
         if args.city not in config:
             raise SystemExit(f"City '{args.city}' not found in {args.config}. Known keys: {sorted(config)}")
 
         city_urls = config[args.city]
         outdir = Path(args.output_dir) if args.output_dir else root / "data" / "raw" / "99acres" / slugify(args.city)
-        summary = collect_city(args.city, city_urls, outdir, args, guard, fieldnames, kaggle_ids)
+        summary = scrape_city(args.city, city_urls, outdir, args, guard)
         print(json.dumps(summary, indent=2))
 
 

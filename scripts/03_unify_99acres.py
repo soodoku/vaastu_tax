@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract Vaastu mentions from all 99acres datasets and create unified output.
+"""Unify all 99acres datasets and extract Vaastu mentions.
 
 Processes:
 1. CampusX data (data/raw/99acres_campusx/)
@@ -7,108 +7,47 @@ Processes:
 3. Our scraper output (data/raw/99acres/) if present
 
 Outputs:
-- data/derived/all_99acres_vaastu.csv - unified dataset with vaastu_mentioned flag
+- data/derived/all_99acres_vaastu.parquet - unified dataset with vaastu_mentioned flag
 - data/derived/data_manifest.json - summary statistics
 
 Usage
 -----
-python scripts/03_extract_vaastu.py
+python scripts/03_unify_99acres.py
 """
 
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
-try:
-    import pandas as pd
-except ImportError:
-    print("pandas required: pip install pandas")
-    sys.exit(1)
+import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.utils import (
+    extract_vaastu_mentions,
+    extract_sector_from_text,
+    extract_city_from_address,
+    normalize_price_to_crore,
+)
 
 
 def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-RE_VAASTU = re.compile(r"\bvaa?stu\b", re.IGNORECASE)
-
-
 def detect_vaastu(text: str | None) -> bool:
     if not text or pd.isna(text):
         return False
-    return bool(RE_VAASTU.search(str(text)))
+    vaastu_mentioned, _ = extract_vaastu_mentions(str(text))
+    return vaastu_mentioned
 
 
-def extract_vaastu_mentions(text: str | None) -> str | None:
+def extract_vaastu_text(text: str | None) -> str | None:
     if not text or pd.isna(text):
         return None
-    text = str(text)
-    matches = RE_VAASTU.findall(text)
-    if not matches:
-        return None
-    sentences = []
-    for sentence in re.split(r"[.!?\n]", text):
-        if RE_VAASTU.search(sentence):
-            sentences.append(sentence.strip())
-    return " || ".join(sentences[:3]) if sentences else "vaastu mentioned"
-
-
-def normalize_price_to_crore(price: float | None) -> float | None:
-    if price is None or pd.isna(price):
-        return None
-    try:
-        price = float(price)
-    except (ValueError, TypeError):
-        return None
-    if price <= 0:
-        return None
-    if price > 100:
-        return price / 10000000.0
-    return price
-
-
-RE_SECTOR = re.compile(r"sector\s*(\d+[a-z]?)", re.IGNORECASE)
-
-
-def extract_sector_from_text(text: str | None) -> str | None:
-    """Extract sector number from address or location text."""
-    if not text or pd.isna(text):
-        return None
-    text = str(text)
-    match = RE_SECTOR.search(text)
-    if match:
-        return f"sector_{match.group(1).lower()}"
-    return None
-
-
-def extract_city_from_address(address: str | None) -> str | None:
-    if not address or pd.isna(address):
-        return None
-    address = str(address).lower()
-    city_patterns = {
-        "gurgaon": ["gurgaon", "gurugram"],
-        "mumbai": ["mumbai"],
-        "hyderabad": ["hyderabad"],
-        "kolkata": ["kolkata", "calcutta"],
-        "delhi": ["delhi", "new delhi"],
-        "bangalore": ["bangalore", "bengaluru"],
-        "chennai": ["chennai"],
-        "pune": ["pune"],
-        "noida": ["noida"],
-        "greater noida": ["greater noida"],
-        "faridabad": ["faridabad"],
-        "ghaziabad": ["ghaziabad"],
-        "thane": ["thane"],
-        "navi mumbai": ["navi mumbai"],
-    }
-    for city, patterns in city_patterns.items():
-        for pattern in patterns:
-            if pattern in address:
-                return city
-    return None
+    _, vaastu_text = extract_vaastu_mentions(str(text))
+    return vaastu_text
 
 
 def load_campusx_data(root: Path) -> pd.DataFrame:
@@ -144,7 +83,7 @@ def load_campusx_data(root: Path) -> pd.DataFrame:
             combined["_vaastu_text"] += " " + combined[col].fillna("").astype(str)
 
     combined["vaastu_mentioned"] = combined["_vaastu_text"].apply(detect_vaastu).astype(int)
-    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(extract_vaastu_mentions)
+    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(extract_vaastu_text)
     combined.drop(columns=["_vaastu_text"], inplace=True)
 
     combined["city"] = "gurgaon"
@@ -209,7 +148,7 @@ def load_arvanshul_data(root: Path) -> pd.DataFrame:
             combined["_vaastu_text"] += " " + combined[col].fillna("").astype(str)
 
     combined["vaastu_mentioned"] = combined["_vaastu_text"].apply(detect_vaastu).astype(int)
-    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(extract_vaastu_mentions)
+    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(extract_vaastu_text)
     combined.drop(columns=["_vaastu_text"], inplace=True)
 
     rename_map = {
@@ -235,13 +174,9 @@ def load_arvanshul_data(root: Path) -> pd.DataFrame:
     combined.rename(columns={k: v for k, v in rename_map.items() if k in combined.columns}, inplace=True)
 
     if "price_crore" in combined.columns:
-        combined["price_crore"] = pd.to_numeric(combined["price_crore"], errors="coerce")
-        mask = combined["price_crore"] > 100
-        combined.loc[mask, "price_crore"] = combined.loc[mask, "price_crore"] / 10000000.0
+        combined["price_crore"] = combined["price_crore"].apply(normalize_price_to_crore)
 
     return combined
-
-
 
 
 def load_our_scraper_data(root: Path) -> pd.DataFrame:
@@ -254,8 +189,17 @@ def load_our_scraper_data(root: Path) -> pd.DataFrame:
     for city_dir in scraper_dir.iterdir():
         if not city_dir.is_dir():
             continue
+        parquet_path = city_dir / "parsed_listings.parquet"
         csv_path = city_dir / "parsed_listings.csv"
-        if csv_path.exists():
+        if parquet_path.exists():
+            try:
+                df = pd.read_parquet(parquet_path)
+                df["source"] = "our_scraper"
+                df["source_file"] = f"{city_dir.name}/parsed_listings.parquet"
+                dfs.append(df)
+            except Exception as e:
+                print(f"  Error loading {parquet_path}: {e}")
+        elif csv_path.exists():
             try:
                 df = pd.read_csv(csv_path, low_memory=False)
                 df["source"] = "our_scraper"
@@ -432,14 +376,14 @@ def main() -> None:
     output_cols = [c for c in output_cols if c in combined.columns]
     output_df = combined[output_cols]
 
-    output_csv = derived_dir / "all_99acres_vaastu.csv"
-    output_df.to_csv(output_csv, index=False)
-    print(f"\nSaved to {output_csv}")
+    output_parquet = derived_dir / "all_99acres_vaastu.parquet"
+    output_df.to_parquet(output_parquet, index=False, compression="zstd")
+    print(f"\nSaved to {output_parquet}")
 
     manifest = {
         "generated_at": pd.Timestamp.now().isoformat(),
         "statistics": stats,
-        "output_file": str(output_csv.relative_to(root)),
+        "output_file": str(output_parquet.relative_to(root)),
         "columns": output_cols,
     }
 

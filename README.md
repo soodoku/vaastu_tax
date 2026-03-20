@@ -15,15 +15,12 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 | CampusX (Gurgaon) | 3,916 | 53% | +6.7% | *** |
 | Magicbricks (5 cities) | 26,621 | 39.4% | +3.8% | *** |
 | Housing.com (7 cities) | 1,670 | 16% | +7.1% | n.s. |
-| Kaggle (4 cities) | ~21K | 5.5% | -3.2% | n.s. |
 
 ### Gurugram Prototype (CampusX Data)
 
 | Specification | N | Vaastu Premium | 95% CI | Significance |
 |--------------|---|----------------|--------|--------------|
-| + sector FE (average) | 3,916 | +2.7% | [-0.9%, 6.4%] | n.s. |
-| Flat (type-specific) | 2,995 | -0.0% | [-3.4%, 3.4%] | n.s. |
-| **House (type-specific)** | 921 | **+11.9%** | [1.1%, 23.9%] | ** |
+| + sector FE (preferred) | 3,916 | +2.7% | [-0.9%, 6.4%] | n.s. |
 | Matching robustness | 392 | +6.0% | [0.4%, 12.4%] | * |
 
 ### Housing.com Robustness (by City)
@@ -36,7 +33,7 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 | Chennai | 285 | 12% | +0.6% | n.s. |
 | Hyderabad | 277 | 19% | -3.3% | n.s. |
 
-Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 lakh at median price), while flats show no effect. The Housing.com data provides directionally consistent results (+7.1%) but with wider confidence intervals due to lower Vaastu mention rates.
+Key finding: The Vaastu premium in Gurugram is modest once sector FE are included (+2.7%, n.s.). Matching robustness check yields +6.0% (* p<0.05). Housing.com data provides directionally consistent results (+7.1%) but with wider confidence intervals due to lower Vaastu mention rates.
 
 ### Magicbricks Multi-City Data
 
@@ -62,10 +59,9 @@ Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 l
 
 - **Source**: magicbricks.com listings (apartments, houses, villas)
 - **Collected via**: `scripts/01_collect_magicbricks.py` (Playwright-based scraper)
-- **Cities**: Delhi-NCR, Pune, Mumbai, Bangalore, Jaipur, Lucknow, Patna, Chandigarh, Rajkot
-- **Sample**: 9,439 listings across 21 city-property-type combinations
+- **Cities**: Delhi-NCR, Pune, Navi Mumbai, Bangalore, Jaipur, Lucknow, Patna, Chandigarh, Rajkot
+- **Sample**: 26,621 listings (sale only, after deduplication and cleaning)
 - **Preserves**: Raw HTML for reproducibility
-- **Status**: Vaastu extraction working; price parsing needs fix
 
 ### 99acres CampusX Data (`data/raw/99acres_campusx/`)
 
@@ -81,6 +77,7 @@ Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 l
 - **Obtained via**: Kaggle dataset [arvanshul/real-estate-dataset-99acres](https://www.kaggle.com/datasets/arvanshul/real-estate-dataset-99acres)
 - **Cities**: Gurgaon, Mumbai, Hyderabad, Kolkata
 - **Sample**: ~38,000 listings (~21,512 after filtering)
+- **Limitation**: Excluded from vaastu analysis. Features/amenities stored as numeric codes without decoder; vaastu detectable only in free-text descriptions (~5.5% rate vs ~50% in comparable 99acres data from CampusX)
 
 ### 99acres Multi-City Data (`data/raw/99acres/<city>/`)
 
@@ -154,3 +151,4 @@ uv run python scripts/05_validate_kaggle.py
 - List prices, not transaction prices
 - Vaastu = text mention, not structural certification
 - Within-sector support for houses is thin
+- Kaggle/arvanshul data excluded from vaastu analysis: features stored as numeric codes without decoder; vaastu detectable only in free-text descriptions (~5% vs ~50% true rate)

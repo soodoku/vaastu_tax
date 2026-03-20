@@ -24,7 +24,7 @@ import math
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 # Keep linear algebra single-threaded for reproducible, low-memory runs.
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -112,7 +112,7 @@ def price_fraction_to_pct(x: float) -> str:
 
 def p_value_str(x: float) -> str:
     if x < 0.001:
-        return "<0.001"
+        return "$<$0.001"
     return f"{x:.3f}"
 
 
@@ -289,7 +289,7 @@ def build_collected_housingcom_dataset(input_csv: Path) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def run_legacy_models(a: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def run_legacy_models(a: pd.DataFrame) -> pd.DataFrame:
     formula_s1 = "ln_price ~ vaastu_i"
     formula_s2 = "ln_price ~ vaastu_i + ln_area + bedRoom + bathroom + balcony_n + floorNum_w + C(agePossession) + C(facing) + C(property_type)"
     formula_s3 = (
@@ -326,53 +326,7 @@ def run_legacy_models(a: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
             }
         )
 
-    formula_flex = (
-        "ln_price ~ vaastu_i*C(property_type) + ln_area*C(property_type) + bedRoom*C(property_type) + "
-        "bathroom*C(property_type) + balcony_n*C(property_type) + floorNum_w*C(property_type) + "
-        "C(agePossession)*C(property_type) + C(facing)*C(property_type) + pooja_room2*C(property_type) + "
-        "servant_room2*C(property_type) + store_room2*C(property_type) + study_room2*C(property_type) + "
-        "others_room2*C(property_type) + C(furnishing_type)*C(property_type) + luxury_score_w*C(property_type) + C(sector)"
-    )
-    model_f, robust_f = fit_cluster(formula_flex, a, "sector")
-    names = robust_f.model.exog_names
-    ix_flat = names.index("vaastu_i")
-    ix_int = names.index("vaastu_i:C(property_type)[T.house]")
-
-    beta_flat = float(robust_f.params[ix_flat])
-    se_flat = float(robust_f.bse[ix_flat])
-
-    cov = robust_f.cov_params()
-    beta_house = float(robust_f.params[ix_flat] + robust_f.params[ix_int])
-    se_house = float(np.sqrt(cov[ix_flat, ix_flat] + cov[ix_int, ix_int] + 2 * cov[ix_flat, ix_int]))
-
-    R = np.zeros((1, len(names)))
-    R[0, ix_flat] = 1
-    R[0, ix_int] = 1
-    p_house = float(robust_f.t_test(R).pvalue)
-
-    type_rows = []
-    for property_type, beta, se, pval in [
-        ("flat", beta_flat, se_flat, float(robust_f.pvalues[ix_flat])),
-        ("house", beta_house, se_house, p_house),
-    ]:
-        med_price = float(a.loc[a["property_type"] == property_type, "price"].median())
-        prem = math.exp(beta) - 1.0
-        type_rows.append(
-            {
-                "property_type": property_type,
-                "n": int((a["property_type"] == property_type).sum()),
-                "beta_log_points": beta,
-                "se": se,
-                "p_value": pval,
-                "premium_pct": prem,
-                "premium_pct_ci_low": math.exp(beta - 1.96 * se) - 1.0,
-                "premium_pct_ci_high": math.exp(beta + 1.96 * se) - 1.0,
-                "median_price_cr": med_price,
-                "wtp_median_lakh": prem * med_price * 100.0,
-            }
-        )
-
-    return pd.DataFrame(average_rows), pd.DataFrame(type_rows)
+    return pd.DataFrame(average_rows)
 
 
 def run_legacy_matching(a: pd.DataFrame) -> pd.DataFrame:
@@ -505,7 +459,7 @@ def sample_counts_by_type(a: pd.DataFrame) -> pd.DataFrame:
     return counts
 
 
-def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, type_df: Optional[pd.DataFrame], match_df: Optional[pd.DataFrame], support_df: pd.DataFrame) -> Dict[str, str]:
+def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, match_df: Optional[pd.DataFrame], support_df: pd.DataFrame) -> Dict[str, str]:
     total = int(a.shape[0])
     total_vaastu = int(a["vaastu_i"].sum())
     overall_share = total_vaastu / total if total else float("nan")
@@ -530,22 +484,6 @@ def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, type_df: Optional[pd.Dat
             "PreferredAverageCIHighPct": price_fraction_to_pct(preferred["premium_pct_ci_high"]),
         }
     )
-
-    if type_df is not None and not type_df.empty:
-        flat = type_df.loc[type_df["property_type"] == "flat"].iloc[0]
-        house = type_df.loc[type_df["property_type"] == "house"].iloc[0]
-        macros.update(
-            {
-                "FlatPremiumPct": price_fraction_to_pct(flat["premium_pct"]),
-                "FlatCILowPct": price_fraction_to_pct(flat["premium_pct_ci_low"]),
-                "FlatCIHighPct": price_fraction_to_pct(flat["premium_pct_ci_high"]),
-                "HousePremiumPct": price_fraction_to_pct(house["premium_pct"]),
-                "HouseCILowPct": price_fraction_to_pct(house["premium_pct_ci_low"]),
-                "HouseCIHighPct": price_fraction_to_pct(house["premium_pct_ci_high"]),
-                "MedianHousePriceCr": fmt_num(house["median_price_cr"], 2),
-                "MedianHouseWTPLakh": fmt_num(house["wtp_median_lakh"], 1),
-            }
-        )
 
     if match_df is not None and not match_df.empty:
         match = match_df.iloc[0]
@@ -578,7 +516,7 @@ def write_macros_tex(path: Path, macros: Dict[str, str]) -> None:
     write_text(path, "\n".join(lines) + "\n")
 
 
-def plot_coefficients(avg_df: pd.DataFrame, type_df: Optional[pd.DataFrame], out_path: Path) -> None:
+def plot_coefficients(avg_df: pd.DataFrame, out_path: Path) -> None:
     fig = plt.figure(figsize=(8.2, 4.8))
     ax = fig.add_subplot(111)
     labels = [
@@ -599,16 +537,6 @@ def plot_coefficients(avg_df: pd.DataFrame, type_df: Optional[pd.DataFrame], out
         avg_df.loc[avg_df["model"] == "+ quality/room", "se"].iloc[0],
         avg_df.loc[avg_df["model"] == "+ sector FE (preferred average)", "se"].iloc[0],
     ]
-    if type_df is not None and not type_df.empty:
-        labels += ["Flat (flex model)", "House (flex model)"]
-        betas += [
-            type_df.loc[type_df["property_type"] == "flat", "beta_log_points"].iloc[0],
-            type_df.loc[type_df["property_type"] == "house", "beta_log_points"].iloc[0],
-        ]
-        ses += [
-            type_df.loc[type_df["property_type"] == "flat", "se"].iloc[0],
-            type_df.loc[type_df["property_type"] == "house", "se"].iloc[0],
-        ]
     y = np.arange(len(labels))[::-1]
     ax.errorbar(betas, y, xerr=np.asarray(ses) * 1.96, fmt="o")
     ax.axvline(0.0, linewidth=1)
@@ -626,7 +554,6 @@ def export_results_tables(
     out_tex: Path,
     counts_df: pd.DataFrame,
     avg_df: pd.DataFrame,
-    type_df: Optional[pd.DataFrame],
     match_df: Optional[pd.DataFrame],
     support_df: pd.DataFrame,
 ) -> None:
@@ -668,32 +595,6 @@ def export_results_tables(
             note="All specifications use log list price as the dependent variable. The preferred specification includes sector fixed effects and the full set of structural and quality controls.",
         ),
     )
-
-    if type_df is not None and not type_df.empty:
-        type_pub = type_df.copy()
-        type_pub["n"] = type_pub["n"].map(fmt_int)
-        type_pub["premium_pct"] = type_pub["premium_pct"].map(price_fraction_to_pct)
-        type_pub["95\\% CI"] = type_df.apply(
-            lambda r: f"[{price_fraction_to_pct(r['premium_pct_ci_low'])}, {price_fraction_to_pct(r['premium_pct_ci_high'])}]",
-            axis=1,
-        )
-        type_pub["p_value"] = type_pub["p_value"].map(p_value_str)
-        type_pub["median_price_cr"] = type_pub["median_price_cr"].map(lambda x: f"{x:.2f}")
-        type_pub["wtp_median_lakh"] = type_pub["wtp_median_lakh"].map(lambda x: f"{x:.1f}")
-        type_pub = pd.DataFrame(type_pub[["property_type", "n", "premium_pct", "95\\% CI", "p_value", "median_price_cr", "wtp_median_lakh"]])
-        type_pub["property_type"] = type_pub["property_type"].replace({"flat": "Flats", "house": "Ind. houses"})
-        type_pub.columns = pd.Index(["Segment", "N", "Premium", "95\\% CI", "p", "Median price (Cr)", "WTP (Lakh)"])
-        write_text(
-            out_tex / "tab_heterogeneity.tex",
-            latex_table_from_df(
-                type_pub,
-                caption="Heterogeneity by property type",
-                label="tab:heterogeneity",
-                note="The flexible model allows the Vaastu coefficient and all main controls to differ by property type while keeping sector fixed effects common.",
-                size=r"\small\setlength{\tabcolsep}{4pt}",
-                column_format="lrrrrrr",
-            ),
-        )
 
     if match_df is not None and not match_df.empty:
         match_pub = match_df.copy()
@@ -782,44 +683,41 @@ def main() -> None:
         raw_dir = Path(args.raw_dir) if args.raw_dir else root / "data" / "raw" / "99acres_campusx"
         a = build_legacy_gurugram_dataset(raw_dir)
         save_analysis_sample(a, derived / "vaastu_analysis_sample.csv")
-        avg_df, type_df = run_legacy_models(a)
+        avg_df = run_legacy_models(a)
         match_df = run_legacy_matching(a)
         counts_df = sample_counts_by_type(a)
         support_df = house_sector_support(a)
-        macros = build_macros(a, avg_df, type_df, match_df, support_df)
+        macros = build_macros(a, avg_df, match_df, support_df)
         export_results_tables(
             out_tex=out_tex,
             counts_df=counts_df,
             avg_df=avg_df,
-            type_df=type_df,
             match_df=match_df,
             support_df=support_df,
         )
         write_macros_tex(out_tex / "results_macros.tex", macros)
-        plot_coefficients(avg_df, type_df, out_fig / "vaastu_coefficients.png")
+        plot_coefficients(avg_df, out_fig / "vaastu_coefficients.png")
     else:
         if not args.input_csv:
             raise SystemExit("--input-csv is required when mode=housingcom_collected")
         a = build_collected_housingcom_dataset(Path(args.input_csv))
         save_analysis_sample(a, derived / "housingcom_analysis_sample.csv")
         avg_df = run_collected_models(a)
-        type_df = None
         match_df = None
         counts_df = pd.DataFrame(
             [{"property_type": "house", "vaastu_listings": int(a["vaastu_i"].sum()), "total_listings": int(a.shape[0]), "vaastu_share": float(a["vaastu_i"].mean())}]
         )
         support_df = house_sector_support(a)
-        macros = build_macros(a, avg_df, type_df, match_df, support_df)
+        macros = build_macros(a, avg_df, match_df, support_df)
         export_results_tables(
             out_tex=out_tex,
             counts_df=counts_df,
             avg_df=avg_df,
-            type_df=type_df,
             match_df=match_df,
             support_df=support_df,
         )
         write_macros_tex(out_tex / "results_macros.tex", macros)
-        plot_coefficients(avg_df, type_df, out_fig / "vaastu_coefficients.png")
+        plot_coefficients(avg_df, out_fig / "vaastu_coefficients.png")
 
     session = {
         "mode": args.mode,

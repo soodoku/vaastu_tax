@@ -52,6 +52,18 @@ def load_magicbricks_data() -> pd.DataFrame:
     return combined
 
 
+def extract_property_type(city: str) -> str:
+    """Extract property type from directory name (e.g., 'delhi-ncr-apartment' -> 'apartment')."""
+    parts = city.split("-")
+    known_types = {"apartment", "house", "villa", "studio", "penthouse"}
+    for part in reversed(parts):
+        if part in known_types:
+            return part
+        if part == "floor":
+            return "builder-floor"
+    return "unknown"
+
+
 def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     """Clean and prepare data for regression (shared preprocessing)."""
     df = df.copy()
@@ -91,6 +103,17 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     df["seller_clean"] = df["seller_clean"].replace({"": "Unknown", "nan": "Unknown"})
 
     df["base_city"] = df["city"].apply(lambda x: x.split("-")[0] if "-" in x else x)
+
+    df["property_type"] = df["city"].apply(extract_property_type)
+    df["prop_class"] = df["property_type"].map({
+        "apartment": "flat_type",
+        "builder-floor": "flat_type",
+        "studio": "flat_type",
+        "penthouse": "flat_type",
+        "house": "house_type",
+        "villa": "house_type",
+        "unknown": "unknown",
+    })
 
     return df
 
@@ -489,6 +512,94 @@ def run_city_regressions(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(city_results)
 
 
+def run_property_type_regressions(df: pd.DataFrame) -> pd.DataFrame:
+    """Run separate regressions by property class (flat-type vs house-type).
+
+    This tests whether the CampusX finding (house +11.9%, flat ~0%) replicates.
+    """
+    print("\n" + "=" * 70)
+    print("PROPERTY TYPE ANALYSIS")
+    print("=" * 70)
+    print("Testing CampusX finding: Flat ~0%, House +11.9%")
+    print(
+        "\nModel: ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(base_city)\n"
+    )
+
+    df_bath = df.dropna(subset=["bathrooms"])
+    results = []
+
+    print("## By Property Type (raw)")
+    for prop_type in sorted(df_bath["property_type"].unique()):
+        if prop_type == "unknown":
+            continue
+        subset = df_bath[df_bath["property_type"] == prop_type]
+        n = len(subset)
+        vaastu_n = int(subset["vaastu"].sum())
+        vaastu_pct = 100 * subset["vaastu"].mean()
+        print(f"  {prop_type:15s}: n={n:5d}, vaastu={vaastu_n:4d} ({vaastu_pct:5.1f}%)")
+
+    print("\n## By Property Class (flat_type vs house_type)")
+    for prop_class in ["flat_type", "house_type"]:
+        subset = df_bath[df_bath["prop_class"] == prop_class]
+        n = len(subset)
+        vaastu_n = int(subset["vaastu"].sum())
+        vaastu_pct = 100 * subset["vaastu"].mean() if n > 0 else 0
+
+        if n < 100 or vaastu_n < 10:
+            print(
+                f"{prop_class:12s}: n={n:5d}, vaastu={vaastu_n:4d} ({vaastu_pct:5.1f}%) - SKIPPED"
+            )
+            continue
+
+        n_cities = subset["base_city"].nunique()
+        formula = "ln_price ~ vaastu + bhk_cat + ln_area + bathrooms"
+        if n_cities > 1:
+            formula += " + C(base_city)"
+
+        try:
+            m = smf.ols(formula, data=subset).fit(cov_type="HC3")
+            coef = m.params["vaastu"]
+            se = m.bse["vaastu"]
+            pval = m.pvalues["vaastu"]
+            pct = (np.exp(coef) - 1) * 100
+            sig = get_significance_stars(pval)
+
+            print(
+                f"{prop_class:12s}: n={n:5d}, vaastu={vaastu_n:4d} ({vaastu_pct:5.1f}%) | "
+                f"Premium: {pct:+6.1f}% (SE: {se:.3f}) {sig}"
+            )
+
+            results.append({
+                "prop_class": prop_class,
+                "n": n,
+                "vaastu_n": vaastu_n,
+                "vaastu_pct": vaastu_pct,
+                "coef": coef,
+                "se": se,
+                "pval": pval,
+                "pct": pct,
+            })
+        except Exception as e:
+            print(f"{prop_class:12s}: n={n:5d}, vaastu={vaastu_n:4d} - ERROR: {e}")
+
+    if len(results) >= 2:
+        print("\n## Comparison with CampusX")
+        flat_row = next((r for r in results if r["prop_class"] == "flat_type"), None)
+        house_row = next((r for r in results if r["prop_class"] == "house_type"), None)
+        if flat_row and house_row:
+            print(f"  CampusX:     flat ~0% (n.s.),    house +11.9% (**)")
+            flat_sig = get_significance_stars(flat_row["pval"])
+            house_sig = get_significance_stars(house_row["pval"])
+            print(
+                f"  Magicbricks: flat {flat_row['pct']:+.1f}% {flat_sig}, "
+                f"house {house_row['pct']:+.1f}% {house_sig}"
+            )
+            diff = house_row["pct"] - flat_row["pct"]
+            print(f"  Difference (house - flat): {diff:+.1f} percentage points")
+
+    return pd.DataFrame(results)
+
+
 def main():
     print("Loading Magicbricks data...")
     df = load_magicbricks_data()
@@ -524,6 +635,7 @@ def main():
 
     results = run_regressions(df)
     run_city_regressions(df)
+    run_property_type_regressions(df)
 
     print("\n" + "=" * 70)
     print("SUMMARY")

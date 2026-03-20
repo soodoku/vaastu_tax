@@ -41,6 +41,59 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def load_magicbricks_data() -> pd.DataFrame:
+    """Load magicbricks data from parquet files."""
+    root = project_root()
+    mb_dir = root / "data" / "raw" / "magicbricks"
+    all_data = []
+
+    for city_dir in mb_dir.iterdir():
+        if not city_dir.is_dir():
+            continue
+        parquet_path = city_dir / "parsed_listings.parquet"
+        if not parquet_path.exists():
+            continue
+        df = pd.read_parquet(parquet_path)
+        if len(df) < 10:
+            continue
+        df["city"] = city_dir.name
+        all_data.append(df)
+
+    if not all_data:
+        return pd.DataFrame()
+
+    combined = pd.concat(all_data, ignore_index=True)
+    combined = combined.drop_duplicates(subset=["property_id"])
+    combined["source"] = "magicbricks"
+    return combined
+
+
+def load_housingcom_data() -> pd.DataFrame:
+    """Load housingcom data from CSV files."""
+    root = project_root()
+    hc_dir = root / "data" / "raw" / "housingcom"
+    all_data = []
+
+    for city_dir in hc_dir.iterdir():
+        if not city_dir.is_dir():
+            continue
+        csv_path = city_dir / "parsed_listings.csv"
+        if not csv_path.exists():
+            continue
+        df = pd.read_csv(csv_path)
+        if len(df) < 10:
+            continue
+        df["city"] = city_dir.name
+        all_data.append(df)
+
+    if not all_data:
+        return pd.DataFrame()
+
+    combined = pd.concat(all_data, ignore_index=True)
+    combined["source"] = "housingcom"
+    return combined
+
+
 def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare data for regression analysis with quality filters."""
     df = df.copy()
@@ -60,6 +113,25 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     if n_start - n_end > 0:
         print(f"  (filtered {n_start - n_end} rows with invalid price/bhk)")
 
+    return df
+
+
+def create_feature_dummies(df: pd.DataFrame) -> pd.DataFrame:
+    """Create dummy variables from comma-separated feature codes."""
+    if "features" not in df.columns:
+        return df
+    df = df.copy()
+    all_codes = set()
+    for features in df["features"].dropna():
+        for code in str(features).split(","):
+            code = code.strip()
+            if code.isdigit():
+                all_codes.add(int(code))
+    for code in sorted(all_codes):
+        col_name = f"feat_{code}"
+        df[col_name] = df["features"].fillna("").apply(
+            lambda x, c=code: 1 if str(c) in [s.strip() for s in str(x).split(",")] else 0
+        )
     return df
 
 
@@ -115,6 +187,7 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     """Run multiple regression specifications for a single source."""
     results = []
     source_df = prepare_data(df)
+    source_df = create_feature_dummies(source_df)
 
     has_price = source_df["ln_price"].notna().sum() > 100
     has_area = source_df["ln_area"].notna().sum() > 100
@@ -146,6 +219,11 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     if has_city and not has_sector:
         base = "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
         specs.append(("+ city FE", f"{base} + C(city)"))
+
+    feat_cols = [c for c in source_df.columns if c.startswith("feat_")]
+    if feat_cols and has_bhk and has_area:
+        feat_formula = " + ".join(feat_cols)
+        specs.append(("+ features", f"ln_price ~ vaastu_mentioned + bhk + ln_area + {feat_formula}"))
 
     for spec_name, formula in specs:
         result = run_regression(source_df, formula, source_name)
@@ -285,14 +363,36 @@ def main() -> None:
         print(f"ERROR: {csv_path} not found. Run 03_extract_vaastu.py first.")
         sys.exit(1)
 
-    print("Loading data...")
+    print("Loading 99acres data...")
     df = pd.read_csv(csv_path, low_memory=False)
+    print(f"  99acres: {len(df)} rows")
+
+    print("Loading magicbricks data...")
+    mb_df = load_magicbricks_data()
+    if len(mb_df) > 0:
+        print(f"  magicbricks: {len(mb_df)} rows")
+        df = pd.concat([df, mb_df], ignore_index=True)
+    else:
+        print("  magicbricks: no data found")
+
+    print("Loading housingcom data...")
+    hc_df = load_housingcom_data()
+    if len(hc_df) > 0:
+        print(f"  housingcom: {len(hc_df)} rows")
+        df = pd.concat([df, hc_df], ignore_index=True)
+    else:
+        print("  housingcom: no data found")
+
     print(f"  Total: {len(df)} rows")
 
     all_results = []
 
     print("\n=== Source-Specific Analysis ===")
+    excluded_sources = {"kaggle_arvanshul"}
     for source in df["source"].unique():
+        if source in excluded_sources:
+            print(f"\n{source}: excluded from analysis")
+            continue
         source_df = df[df["source"] == source]
         if len(source_df) < 100:
             print(f"\n{source}: n={len(source_df)} (too small, skipping)")

@@ -418,7 +418,7 @@ def main() -> None:
 
         total_parsed = sum(s["parsed"] for s in all_summaries)
         total_errors = sum(s["errors"] for s in all_summaries)
-        print(f"\n=== Parsing complete ===", file=sys.stderr)
+        print("\n=== Parsing complete ===", file=sys.stderr)
         print(f"Cities: {len(all_summaries)}, Parsed: {total_parsed}, Errors: {total_errors}", file=sys.stderr)
     else:
         city_dir = data_dir / slugify(args.city)

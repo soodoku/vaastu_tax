@@ -409,7 +409,7 @@ def main() -> None:
             print(json.dumps(summary, indent=2))
 
         total_detail = sum(s["detail_pages_scraped"] for s in all_summaries)
-        print(f"\n=== Collection complete ===", file=sys.stderr)
+        print("\n=== Collection complete ===", file=sys.stderr)
         print(f"Cities: {len(all_summaries)}, Total detail pages: {total_detail}", file=sys.stderr)
     else:
         if args.city not in config:

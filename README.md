@@ -13,6 +13,7 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 | Source | N | Vaastu % | Premium | Sig. |
 |--------|---|----------|---------|------|
 | CampusX (Gurgaon) | 3,916 | 53% | +6.7% | *** |
+| Magicbricks (5 cities) | 26,621 | 39.4% | +3.8% | *** |
 | Housing.com (7 cities) | 1,670 | 16% | +7.1% | n.s. |
 | Kaggle (4 cities) | ~21K | 5.5% | -3.2% | n.s. |
 
@@ -37,18 +38,23 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 
 Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 lakh at median price), while flats show no effect. The Housing.com data provides directionally consistent results (+7.1%) but with wider confidence intervals due to lower Vaastu mention rates.
 
-### Magicbricks Multi-City Data (NEW)
+### Magicbricks Multi-City Data
 
-| City | N | Vaastu % |
-|------|---|----------|
-| Pune | 2,889 | 7.1% |
-| Navi Mumbai | 1,364 | 13.1% |
-| Jaipur | 1,318 | 21.7% |
-| Delhi-NCR | 2,634 | 10.3% |
-| Lucknow | 394 | 16.3% |
-| Patna | 177 | 11.9% |
-| Chandigarh | 161 | 11.2% |
-| **Total** | **9,439** | **11.7%** |
+| City | N | Vaastu % | Premium | Sig. |
+|------|---|----------|---------|------|
+| Delhi | 12,368 | 45.4% | +3.8% | *** |
+| Pune | 5,953 | 37.1% | +7.7% | *** |
+| Navi Mumbai | 3,306 | 34.3% | +2.1% | n.s. |
+| Jaipur | 2,089 | 29.8% | +3.9% | * |
+| Lucknow | 1,626 | 33.0% | +3.6% | n.s. |
+| **Total** | **26,621** | **39.4%** | - | - |
+
+#### Fixed Effects Robustness
+
+| Specification | N | Premium | p-value |
+|--------------|---|---------|---------|
+| Project FE | 24,604 | +1.4% | 0.005 |
+| Developer FE | 20,868 | +3.7% | <0.0001 |
 
 ## Data Sources
 

@@ -157,7 +157,7 @@ def validate_data(df: pd.DataFrame) -> dict:
             # Check for outliers
             very_low = (prices < 0.01).sum()  # < 1 lakh
             very_high = (prices > 100).sum()  # > 100 Cr
-            print(f"\n⚠️  Price outliers:")
+            print("\n⚠️  Price outliers:")
             print(f"   < ₹1 lakh: {very_low:,}")
             print(f"   > ₹100 Cr: {very_high:,}")
 

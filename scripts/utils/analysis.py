@@ -1,7 +1,6 @@
 """Shared utilities for hedonic regression analysis."""
 
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -163,7 +162,7 @@ def run_hedonic_models(
 
         if print_output:
             print("\n" + "-" * 70)
-            print(f"Model 5: + facing")
+            print("Model 5: + facing")
             print("-" * 70)
         m5 = smf.ols(formula, data=df).fit(cov_type="HC3")
         coef = m5.params["vaastu"]

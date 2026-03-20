@@ -335,7 +335,7 @@ def main() -> None:
     print("\nComputing statistics...")
     stats = compute_statistics(combined)
 
-    print(f"\n=== Summary ===")
+    print("\n=== Summary ===")
     print(f"Total listings: {stats['total_listings']}")
     print(f"Vaastu mentions: {stats['vaastu_mentioned_count']} ({stats['vaastu_mention_rate']:.1f}%)")
 

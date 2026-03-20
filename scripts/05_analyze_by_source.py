@@ -253,7 +253,7 @@ def generate_forest_plot(results: list[dict], output_path: Path) -> None:
     ax.errorbar(
         coefs,
         y_positions,
-        xerr=[[c - l for c, l in zip(coefs, ci_lows)], [h - c for c, h in zip(coefs, ci_highs)]],
+        xerr=[[c - ci_low for c, ci_low in zip(coefs, ci_lows)], [h - c for c, h in zip(coefs, ci_highs)]],
         fmt="o",
         capsize=5,
         capthick=2,
@@ -322,7 +322,7 @@ def main() -> None:
     with open(results_path, "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"\nOutputs:")
+    print("\nOutputs:")
     print(f"  {tex_dir / 'tab_by_source_coefs.tex'}")
     print(f"  {tex_dir / 'tab_aggregate_coef.tex'}")
     print(f"  {figs_dir / 'coef_by_source.png'}")

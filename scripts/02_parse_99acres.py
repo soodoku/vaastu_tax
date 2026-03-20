@@ -14,8 +14,6 @@ python scripts/02_parse_99acres.py --city gurgaon
 python scripts/02_parse_99acres.py --all-cities
 """
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import json
@@ -23,7 +21,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from bs4 import BeautifulSoup
 
@@ -63,29 +61,29 @@ class ListingRecord:
     city: str
     property_type: str
     search_page: int
-    title: Optional[str]
-    locality: Optional[str]
-    price_display: Optional[str]
-    price_crore: Optional[float]
-    builtup_area_sqft: Optional[float]
-    carpet_area_sqft: Optional[float]
-    bhk: Optional[float]
-    bathrooms: Optional[float]
-    balconies: Optional[float]
-    furnishing: Optional[str]
-    facing: Optional[str]
-    possession_status: Optional[str]
-    floor_number: Optional[int]
-    total_floors: Optional[int]
-    property_age: Optional[str]
-    amenities: Optional[str]
-    description: Optional[str]
+    title: str | None
+    locality: str | None
+    price_display: str | None
+    price_crore: float | None
+    builtup_area_sqft: float | None
+    carpet_area_sqft: float | None
+    bhk: float | None
+    bathrooms: float | None
+    balconies: float | None
+    furnishing: str | None
+    facing: str | None
+    possession_status: str | None
+    floor_number: int | None
+    total_floors: int | None
+    property_age: str | None
+    amenities: str | None
+    description: str | None
     vaastu_mentioned: int
-    vaastu_mentions_text: Optional[str]
-    seller_type: Optional[str]
-    posted_date: Optional[str]
-    last_updated: Optional[str]
-    collected_at: Optional[str]
+    vaastu_mentions_text: str | None
+    seller_type: str | None
+    posted_date: str | None
+    last_updated: str | None
+    collected_at: str | None
     raw_html_path: str
 
 
@@ -120,15 +118,15 @@ def parse_args() -> argparse.Namespace:
 
 
 def parse_detail_from_next_data(
-    next_data: Dict[str, Any],
+    next_data: dict[str, Any],
     url: str,
     city: str,
     property_type: str,
     property_id: str,
     search_page: int,
     raw_html_path: str,
-    collected_at: Optional[str] = None,
-) -> Optional[ListingRecord]:
+    collected_at: str | None = None,
+) -> ListingRecord | None:
     try:
         props = next_data.get("props", {})
         page_props = props.get("pageProps", {})
@@ -210,7 +208,7 @@ def parse_detail_from_text(
     property_id: str,
     search_page: int,
     raw_html_path: str,
-    collected_at: Optional[str] = None,
+    collected_at: str | None = None,
 ) -> ListingRecord:
     lines = extract_lines(text)
     all_text = "\n".join(lines)
@@ -329,7 +327,8 @@ def parse_detail_from_text(
                 amenities = " | ".join(amen_lines)
             break
 
-    vaastu_mentioned, vaastu_text = extract_vaastu_mentions(all_text)
+    combined_text = " ".join(filter(None, [title, description, amenities]))
+    vaastu_mentioned, vaastu_text = extract_vaastu_mentions(combined_text)
 
     return ListingRecord(
         property_id=property_id,
@@ -364,7 +363,7 @@ def parse_detail_from_text(
     )
 
 
-def get_fieldnames() -> List[str]:
+def get_fieldnames() -> list[str]:
     return list(asdict(ListingRecord(
         property_id="", url="", city="", property_type="", search_page=0,
         title=None, locality=None, price_display=None, price_crore=None,
@@ -412,8 +411,13 @@ def parse_city(city: str, city_dir: Path, force: bool) -> dict:
             skipped += 1
             continue
 
-        html_path = city_dir / entry.get("html_path", "")
-
+        raw_path = entry.get("html_path", "")
+        html_path = city_dir / raw_path
+        if not html_path.exists():
+            alt_path = raw_path.replace("raw/", "pages/")
+            if not alt_path.endswith(".gz"):
+                alt_path += ".gz"
+            html_path = city_dir / alt_path
         if not html_path.exists():
             print(f"[{city}] HTML file not found: {html_path}", file=sys.stderr)
             errors += 1

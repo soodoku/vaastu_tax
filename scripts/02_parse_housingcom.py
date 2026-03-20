@@ -339,8 +339,13 @@ def parse_city(city: str, city_dir: Path, force: bool) -> dict:
             skipped += 1
             continue
 
-        html_path = city_dir / entry.get("html_path", "")
-
+        raw_path = entry.get("html_path", "")
+        html_path = city_dir / raw_path
+        if not html_path.exists():
+            alt_path = raw_path.replace("raw/", "pages/")
+            if not alt_path.endswith(".gz"):
+                alt_path += ".gz"
+            html_path = city_dir / alt_path
         if not html_path.exists():
             print(f"[{city}] HTML file not found: {html_path}", file=sys.stderr)
             errors += 1

@@ -358,6 +358,72 @@ def run_regressions(df: pd.DataFrame) -> dict:
             "n": m8.nobs,
         }
 
+    # Model 9: Project FE (within-project variation)
+    if "project_name" in df_bath.columns:
+        df_proj = df_bath.dropna(subset=["project_name"])
+        proj_counts = df_proj["project_name"].value_counts()
+        valid_projs = proj_counts[proj_counts >= 2].index
+        df_proj = df_proj[df_proj["project_name"].isin(valid_projs)]
+
+        if len(df_proj) >= 100 and df_proj["vaastu"].sum() >= 5:
+            proj_vaastu_var = df_proj.groupby("project_name")["vaastu"].nunique()
+            projs_with_variation = (proj_vaastu_var > 1).sum()
+            print("\n" + "-" * 70)
+            print(f"Model 9: Project FE ({len(valid_projs)} projects, {projs_with_variation} with vaastu variation)")
+            print("-" * 70)
+            formula = "ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(project_name)"
+            try:
+                m9 = smf.ols(formula, data=df_proj).fit(cov_type="HC3")
+                coef = m9.params["vaastu"]
+                se = m9.bse["vaastu"]
+                pval = m9.pvalues["vaastu"]
+                pct = (np.exp(coef) - 1) * 100
+                print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+                print(f"Premium: {pct:+.1f}%")
+                print(f"R²: {m9.rsquared:.3f}, N: {int(m9.nobs)}")
+                results["m9_project"] = {
+                    "coef": coef,
+                    "se": se,
+                    "pval": pval,
+                    "pct": pct,
+                    "r2": m9.rsquared,
+                    "n": m9.nobs,
+                }
+            except Exception as e:
+                print(f"Project FE failed: {e}")
+
+    # Model 10: Developer FE
+    if "developer_name" in df_bath.columns:
+        df_dev = df_bath.dropna(subset=["developer_name"])
+        dev_counts = df_dev["developer_name"].value_counts()
+        valid_devs = dev_counts[dev_counts >= 5].index
+        df_dev = df_dev[df_dev["developer_name"].isin(valid_devs)]
+
+        if len(df_dev) >= 100 and df_dev["vaastu"].sum() >= 5:
+            print("\n" + "-" * 70)
+            print(f"Model 10: Developer FE ({len(valid_devs)} developers)")
+            print("-" * 70)
+            formula = "ln_price ~ vaastu + bhk_cat + ln_area + C(base_city) + bathrooms + C(developer_name)"
+            try:
+                m10 = smf.ols(formula, data=df_dev).fit(cov_type="HC3")
+                coef = m10.params["vaastu"]
+                se = m10.bse["vaastu"]
+                pval = m10.pvalues["vaastu"]
+                pct = (np.exp(coef) - 1) * 100
+                print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
+                print(f"Premium: {pct:+.1f}%")
+                print(f"R²: {m10.rsquared:.3f}, N: {int(m10.nobs)}")
+                results["m10_developer"] = {
+                    "coef": coef,
+                    "se": se,
+                    "pval": pval,
+                    "pct": pct,
+                    "r2": m10.rsquared,
+                    "n": m10.nobs,
+                }
+            except Exception as e:
+                print(f"Developer FE failed: {e}")
+
     return results
 
 

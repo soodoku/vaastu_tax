@@ -37,7 +37,29 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 
 Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 lakh at median price), while flats show no effect. The Housing.com data provides directionally consistent results (+7.1%) but with wider confidence intervals due to lower Vaastu mention rates.
 
+### Magicbricks Multi-City Data (NEW)
+
+| City | N | Vaastu % |
+|------|---|----------|
+| Pune | 2,889 | 7.1% |
+| Navi Mumbai | 1,364 | 13.1% |
+| Jaipur | 1,318 | 21.7% |
+| Delhi-NCR | 2,634 | 10.3% |
+| Lucknow | 394 | 16.3% |
+| Patna | 177 | 11.9% |
+| Chandigarh | 161 | 11.2% |
+| **Total** | **9,439** | **11.7%** |
+
 ## Data Sources
+
+### Magicbricks Multi-City Data (`data/raw/magicbricks/<city>/`)
+
+- **Source**: magicbricks.com listings (apartments, houses, villas)
+- **Collected via**: `scripts/01_collect_magicbricks.py` (Playwright-based scraper)
+- **Cities**: Delhi-NCR, Pune, Mumbai, Bangalore, Jaipur, Lucknow, Patna, Chandigarh, Rajkot
+- **Sample**: 9,439 listings across 21 city-property-type combinations
+- **Preserves**: Raw HTML for reproducibility
+- **Status**: Vaastu extraction working; price parsing needs fix
 
 ### 99acres CampusX Data (`data/raw/99acres_campusx/`)
 
@@ -78,34 +100,47 @@ Key finding: Independent houses show a significant 11.9% Vaastu premium (~44.7 l
 
 ```
 scripts/
-  01_collect_99acres.py        # Scrape 99acres.com listings (houses + flats)
+  01_collect_magicbricks.py    # Scrape Magicbricks listings
+  01_collect_99acres.py        # Scrape 99acres.com listings
   01_collect_housingcom.py     # Scrape Housing.com listings
-  02_analyze.py                # Run hedonic regressions, generate tables/figures
-  03_extract_vaastu.py         # Build unified analysis dataset from all sources
-  04_rationalize_covariates.py # Check covariate coverage by source
-  05_analyze_by_source.py      # Source-stratified hedonic regressions
+  02_parse_magicbricks.py      # Parse Magicbricks HTML to parquet
+  02_parse_99acres.py          # Parse 99acres HTML to parquet
+  02_parse_housingcom.py       # Parse Housing.com HTML to parquet
+  04_analyze_magicbricks.py    # Magicbricks hedonic regressions
+  04_analyze_housingcom.py     # Housing.com hedonic regressions
+  05_validate_kaggle.py        # Kaggle data quality checks
+  utils/                       # Shared utilities (parsing, analysis)
 data/
+  raw/magicbricks/<city>/   # Magicbricks scraped data
   raw/99acres_campusx/      # 99acres data from campusx repo (Gurugram)
   raw/99acres/<city>/       # 99acres scraped data (multi-city)
   raw/housingcom/<city>/    # Housing.com scraped data
+  raw/99acres_kaggle/       # Kaggle dataset (arvanshul)
   config/                   # City URL configurations
   derived/                  # Analysis samples
 ms/                         # LaTeX manuscript
-tabs/                        # Generated tables and macros
+tabs/                       # Generated tables
 figs/                       # Generated figures
 ```
 
 ## Quick Start
 
 ```bash
-pip install -r requirements.txt
-playwright install chromium
+# Using uv (recommended)
+uv sync
+uv run playwright install chromium
 
-# Collect 99acres data
-python scripts/01_collect_99acres.py --city gurgaon --property-type both --max-pages 5
+# Collect Magicbricks data
+uv run python scripts/01_collect_magicbricks.py --city delhi-ncr --max-pages 5
 
-# Run analysis on legacy data
-python scripts/02_analyze.py --mode legacy_gurugram
+# Parse collected data
+uv run python scripts/02_parse_magicbricks.py --all-cities --force
+
+# Run analysis
+uv run python scripts/04_analyze_magicbricks.py
+
+# Validate Kaggle data quality
+uv run python scripts/05_validate_kaggle.py
 ```
 
 ## Caveats

@@ -148,6 +148,62 @@ def find_locality(lines: Sequence[str], title: str | None) -> str | None:
     return None
 
 
+def find_price_magicbricks(lines: Sequence[str], full_text: str) -> tuple[str | None, float | None]:
+    """Extract price from Magicbricks listing.
+
+    Magicbricks often has price split across lines:
+    - Line N: "₹"
+    - Line N+1: "19 Lac" or "1.5 Cr"
+
+    Also extracts from description text as fallback.
+    """
+    # Pattern 1: Look for "₹" followed by price on next line
+    for i, line in enumerate(lines):
+        if line.strip() == "₹" and i + 1 < len(lines):
+            next_line = lines[i + 1].strip()
+            # Check if next line is a price value (e.g., "19 Lac", "1.5 Cr")
+            if re.match(r"^[\d,.]+\s*(Lac|Lakh|L|Cr|Crore|K)?\s*$", next_line, re.I):
+                price_str = f"₹ {next_line}"
+                price_val = price_to_crore(price_str)
+                if price_val and price_val > 0.01:  # Reasonable price
+                    return price_str, price_val
+
+    # Pattern 2: Extract from description (e.g., "at a cost of ₹19 Lac")
+    price_pattern = re.compile(
+        r"(?:price|cost|available at|offered at|priced at)[:\s]*₹?\s*([\d,.]+)\s*(Lac|Lakh|L|Cr|Crore)?",
+        re.I
+    )
+    m = price_pattern.search(full_text)
+    if m:
+        value = float(m.group(1).replace(",", ""))
+        unit = (m.group(2) or "").lower()
+        if unit in ("cr", "crore"):
+            price_crore = value
+        elif unit in ("lac", "lakh", "l"):
+            price_crore = value / 100
+        else:
+            price_crore = None
+        if price_crore and price_crore > 0.01:
+            return f"₹{m.group(1)} {m.group(2) or ''}", price_crore
+
+    # Pattern 3: Look for INR ₹XX Lac pattern
+    inr_pattern = re.compile(r"INR\s*₹?\s*([\d,.]+)\s*(Lac|Lakh|L|Cr|Crore)?", re.I)
+    m = inr_pattern.search(full_text)
+    if m:
+        value = float(m.group(1).replace(",", ""))
+        unit = (m.group(2) or "").lower()
+        if unit in ("cr", "crore"):
+            price_crore = value
+        elif unit in ("lac", "lakh", "l"):
+            price_crore = value / 100
+        else:
+            price_crore = None
+        if price_crore and price_crore > 0.01:
+            return f"₹{m.group(1)} {m.group(2) or ''}", price_crore
+
+    return None, None
+
+
 def parse_detail_text(
     text: str,
     url: str,
@@ -161,8 +217,9 @@ def parse_detail_text(
     title = find_title(lines)
     title_idx = lines.index(title) if title in lines else None
     locality = find_locality(lines, title)
-    price_display = find_price_display(lines, title_idx)
-    price_crore_val = price_to_crore(price_display)
+
+    full_text = "\n".join(lines)
+    price_display, price_crore_val = find_price_magicbricks(lines, full_text)
 
     full_text = "\n".join(lines)
     bhk = number_from_match(RE_BHK, title or full_text)

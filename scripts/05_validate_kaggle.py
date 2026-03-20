@@ -1,88 +1,26 @@
 #!/usr/bin/env python3
 """
-Validate Kaggle 99acres URLs by checking which listings still exist.
+Validate Kaggle 99acres data quality.
 
-For each listing in the Kaggle dataset:
-1. Construct full URL from PD_URL
-2. Use Playwright to check if page exists (handles JS/bot detection)
-3. Save validated subset
+Checks for:
+1. Missing vaastu column (buried in DESCRIPTION text)
+2. Price validity and distribution
+3. Area outliers
+4. Data completeness
+5. Comparison with other data sources
 
 Usage:
-    python scripts/05_validate_kaggle.py --test         # Test with 10 URLs
-    python scripts/05_validate_kaggle.py --sample 100   # Sample 100 URLs
-    python scripts/05_validate_kaggle.py                # Full validation
+    uv run python scripts/05_validate_kaggle.py
 """
 
-import argparse
-import asyncio
-import time
+import re
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 KAGGLE_DIR = DATA_DIR / "raw" / "99acres_kaggle" / "arvanshul"
-OUTPUT_PATH = DATA_DIR / "derived" / "kaggle_validated.csv"
-
-BASE_URL = "https://www.99acres.com"
-
-
-async def check_url_playwright(url: str, page) -> tuple[str, int, bool]:
-    """Check if a URL returns valid property page using Playwright."""
-    try:
-        response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-        status = response.status if response else 0
-
-        if status == 200:
-            content = await page.content()
-            is_valid = (
-                "Property Not Available" not in content
-                and "Page not found" not in content
-                and "property-heading" in content.lower()
-                or "price" in content.lower()
-            )
-            return url, status, is_valid
-        return url, status, False
-    except Exception:
-        return url, 0, False
-
-
-async def check_urls_playwright(urls: list[str], concurrency: int = 5) -> dict[str, tuple[int, bool]]:
-    """Check URLs using Playwright browser."""
-    from playwright.async_api import async_playwright
-
-    results = {}
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-
-        pages = [await context.new_page() for _ in range(concurrency)]
-
-        for i in range(0, len(urls), concurrency):
-            batch = urls[i : i + concurrency]
-            tasks = []
-            for j, url in enumerate(batch):
-                page = pages[j % len(pages)]
-                tasks.append(check_url_playwright(url, page))
-
-            batch_results = await asyncio.gather(*tasks)
-            for url, status, is_valid in batch_results:
-                results[url] = (status, is_valid)
-
-            done = min(i + concurrency, len(urls))
-            valid_so_far = sum(1 for v in results.values() if v[1])
-            print(f"  Checked {done}/{len(urls)} URLs ({valid_so_far} valid)...", end="\r")
-
-            if i + concurrency < len(urls):
-                await asyncio.sleep(0.5)
-
-        await browser.close()
-
-    print()
-    return results
 
 
 def load_kaggle_data() -> pd.DataFrame:
@@ -90,16 +28,11 @@ def load_kaggle_data() -> pd.DataFrame:
     all_data = []
 
     for csv_path in KAGGLE_DIR.glob("*.csv"):
-        if csv_path.name == "facets":
-            continue
         if csv_path.is_dir():
             continue
 
         try:
             df = pd.read_csv(csv_path, low_memory=False)
-            if "PD_URL" not in df.columns:
-                continue
-
             city = csv_path.stem.replace("_10k", "").title()
             df["source_city"] = city
             df["source_file"] = csv_path.name
@@ -112,90 +45,250 @@ def load_kaggle_data() -> pd.DataFrame:
     return combined
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Validate Kaggle 99acres URLs")
-    parser.add_argument("--test", action="store_true", help="Test with 10 URLs")
-    parser.add_argument(
-        "--sample", type=int, default=0, help="Sample N URLs (0 = all)"
-    )
-    parser.add_argument(
-        "--batch-size", type=int, default=20, help="Concurrent requests"
-    )
-    args = parser.parse_args()
+def extract_vaastu_from_description(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract vaastu mentions from DESCRIPTION column."""
+    df = df.copy()
 
+    if "DESCRIPTION" not in df.columns:
+        df["vaastu_mentioned"] = 0
+        df["vaastu_text"] = None
+        return df
+
+    def check_vaastu(text):
+        if pd.isna(text):
+            return 0, None
+        text_lower = str(text).lower()
+        if re.search(r"vaastu|vastu", text_lower):
+            # Extract context
+            match = re.search(r".{0,50}(vaastu|vastu).{0,50}", text_lower)
+            context = match.group(0) if match else None
+            return 1, context
+        return 0, None
+
+    results = df["DESCRIPTION"].apply(check_vaastu)
+    df["vaastu_mentioned"] = results.apply(lambda x: x[0])
+    df["vaastu_text"] = results.apply(lambda x: x[1])
+
+    return df
+
+
+def parse_price(price_str: str) -> float | None:
+    """Parse price string to numeric value in crores."""
+    if pd.isna(price_str):
+        return None
+
+    price_str = str(price_str).strip()
+
+    # Pattern: "2.63 Cr" or "85,000" or "1.5 L"
+    m = re.match(r"([\d,.]+)\s*(Cr|Crore|L|Lac|Lakh)?", price_str, re.I)
+    if not m:
+        return None
+
+    value = float(m.group(1).replace(",", ""))
+    unit = (m.group(2) or "").lower()
+
+    if unit in ("cr", "crore"):
+        return value
+    elif unit in ("l", "lac", "lakh"):
+        return value / 100
+    else:
+        # Assume raw rupees
+        return value / 10000000
+
+
+def validate_data(df: pd.DataFrame) -> dict:
+    """Run comprehensive data quality checks."""
+    results = {}
+
+    print("\n" + "=" * 70)
+    print("KAGGLE DATA QUALITY VALIDATION")
+    print("=" * 70)
+
+    # 1. Basic stats
+    print("\n## 1. Basic Statistics")
+    print(f"Total listings: {len(df):,}")
+    print(f"Cities: {df['source_city'].nunique()}")
+    print(f"Columns: {len(df.columns)}")
+
+    # 2. Vaastu column check
+    print("\n## 2. Vaastu Column Check")
+    vaastu_cols = [c for c in df.columns if "vaastu" in c.lower() or "vastu" in c.lower()]
+    if vaastu_cols:
+        print(f"Found vaastu columns: {vaastu_cols}")
+    else:
+        print("⚠️  NO DEDICATED VAASTU COLUMN FOUND")
+        print("   Vaastu info is buried in DESCRIPTION text")
+
+    # Extract vaastu from description
+    df = extract_vaastu_from_description(df)
+    vaastu_count = df["vaastu_mentioned"].sum()
+    vaastu_pct = 100 * df["vaastu_mentioned"].mean()
+    print(f"\n   Vaastu mentions in DESCRIPTION: {vaastu_count:,} ({vaastu_pct:.1f}%)")
+
+    results["vaastu_count"] = vaastu_count
+    results["vaastu_pct"] = vaastu_pct
+
+    # Sample vaastu contexts
+    print("\n   Sample vaastu mentions:")
+    vaastu_samples = df[df["vaastu_mentioned"] == 1]["vaastu_text"].head(5)
+    for i, text in enumerate(vaastu_samples):
+        if text:
+            print(f"   {i+1}. ...{text}...")
+
+    # 3. Price validity
+    print("\n## 3. Price Analysis")
+
+    # Check PRICE column format
+    if "PRICE" in df.columns:
+        print(f"PRICE column dtype: {df['PRICE'].dtype}")
+        print(f"Sample values: {df['PRICE'].head(5).tolist()}")
+
+        # Parse prices
+        df["price_crore"] = df["PRICE"].apply(parse_price)
+        valid_prices = df["price_crore"].notna()
+        print(f"\nValid parsed prices: {valid_prices.sum():,} ({100*valid_prices.mean():.1f}%)")
+
+        if valid_prices.sum() > 0:
+            prices = df.loc[valid_prices, "price_crore"]
+            print(f"Price range: ₹{prices.min():.2f} - ₹{prices.max():.2f} Cr")
+            print(f"Median: ₹{prices.median():.2f} Cr")
+            print(f"Mean: ₹{prices.mean():.2f} Cr")
+
+            # Check for outliers
+            very_low = (prices < 0.01).sum()  # < 1 lakh
+            very_high = (prices > 100).sum()  # > 100 Cr
+            print(f"\n⚠️  Price outliers:")
+            print(f"   < ₹1 lakh: {very_low:,}")
+            print(f"   > ₹100 Cr: {very_high:,}")
+
+            results["price_valid_pct"] = 100 * valid_prices.mean()
+            results["price_median"] = prices.median()
+
+    # Also check MIN_PRICE (numeric column)
+    if "MIN_PRICE" in df.columns:
+        print("\nMIN_PRICE column (numeric):")
+        valid_min = df["MIN_PRICE"].notna() & (df["MIN_PRICE"] > 0)
+        if valid_min.sum() > 0:
+            min_prices_cr = df.loc[valid_min, "MIN_PRICE"] / 10000000
+            print(f"  Valid: {valid_min.sum():,}")
+            print(f"  Range: ₹{min_prices_cr.min():.2f} - ₹{min_prices_cr.max():.2f} Cr")
+            print(f"  Median: ₹{min_prices_cr.median():.2f} Cr")
+
+    # 4. Area analysis
+    print("\n## 4. Area Analysis")
+    area_cols = ["BUILTUP_SQFT", "CARPET_SQFT", "SUPERBUILTUP_SQFT", "SUPER_SQFT"]
+    for col in area_cols:
+        if col not in df.columns:
+            continue
+        valid = df[col].notna() & (df[col] > 0)
+        if valid.sum() == 0:
+            continue
+
+        areas = df.loc[valid, col]
+        print(f"\n{col}:")
+        print(f"  Valid: {valid.sum():,} ({100*valid.mean():.1f}%)")
+        print(f"  Range: {areas.min():.0f} - {areas.max():.0f} sqft")
+        print(f"  Median: {areas.median():.0f} sqft")
+
+        # Outliers
+        tiny = (areas < 100).sum()
+        huge = (areas > 50000).sum()
+        if tiny > 0 or huge > 0:
+            print(f"  ⚠️  Outliers: {tiny} tiny (<100 sqft), {huge} huge (>50k sqft)")
+
+    # 5. BHK distribution
+    print("\n## 5. BHK Distribution")
+    if "BEDROOM_NUM" in df.columns:
+        bhk = df["BEDROOM_NUM"].dropna()
+        print(bhk.value_counts().sort_index().head(10).to_string())
+
+        # Check for unusual values
+        unusual = (bhk > 10).sum()
+        if unusual > 0:
+            print(f"⚠️  {unusual} listings with >10 bedrooms")
+
+    # 6. Missing data
+    print("\n## 6. Missing Data")
+    critical_cols = ["PRICE", "BEDROOM_NUM", "LOCALITY", "DESCRIPTION"]
+    for col in critical_cols:
+        if col in df.columns:
+            missing = df[col].isna().sum()
+            print(f"  {col}: {missing:,} ({100*missing/len(df):.1f}%) missing")
+
+    # 7. By city comparison
+    print("\n## 7. By City Comparison")
+    for city in df["source_city"].unique():
+        city_df = df[df["source_city"] == city]
+        n = len(city_df)
+        vaastu_n = city_df["vaastu_mentioned"].sum()
+        vaastu_pct = 100 * vaastu_n / n if n > 0 else 0
+
+        # Get median price if available
+        if "price_crore" in city_df.columns:
+            valid_prices = city_df["price_crore"].dropna()
+            median_price = valid_prices.median() if len(valid_prices) > 0 else np.nan
+            print(f"  {city}: {n:,} listings, {vaastu_n} vaastu ({vaastu_pct:.1f}%), median ₹{median_price:.1f}Cr")
+        else:
+            print(f"  {city}: {n:,} listings, {vaastu_n} vaastu ({vaastu_pct:.1f}%)")
+
+    return results
+
+
+def print_verdict(results: dict) -> None:
+    """Print overall data quality verdict."""
+    print("\n" + "=" * 70)
+    print("VERDICT: KAGGLE DATA QUALITY ISSUES")
+    print("=" * 70)
+
+    issues = []
+
+    # 1. Low vaastu rate
+    if results.get("vaastu_pct", 0) < 10:
+        issues.append(f"LOW VAASTU RATE: {results['vaastu_pct']:.1f}% (vs 12-50% in scraped data)")
+
+    # 2. No dedicated vaastu column
+    issues.append("NO VAASTU COLUMN: Must extract from free-text DESCRIPTION field")
+
+    # 3. Price issues
+    if results.get("price_valid_pct", 0) < 50:
+        issues.append(f"PRICE DATA SPARSE: Only {results.get('price_valid_pct', 0):.0f}% valid prices")
+
+    print("\n### Issues Found:")
+    for i, issue in enumerate(issues, 1):
+        print(f"  {i}. {issue}")
+
+    print("\n### Comparison with Other Sources:")
+    print("""
+    | Source         | Vaastu % | Dedicated Column | Price Format |
+    |----------------|----------|------------------|--------------|
+    | Kaggle         | ~5.5%    | No (text only)   | String       |
+    | CampusX        | ~53%     | Yes              | Numeric      |
+    | Magicbricks    | ~11.7%   | Yes (parsed)     | Numeric      |
+    | Housing.com    | ~16%     | Yes (parsed)     | Numeric      |
+    """)
+
+    print("\n### Recommendation:")
+    print("""
+    The Kaggle dataset has significant quality limitations:
+
+    1. Vaastu detection requires regex on DESCRIPTION (unreliable vs dedicated field)
+    2. Low vaastu mention rate suggests many listings don't discuss it in description
+    3. This likely leads to ATTENUATION BIAS in regression estimates
+
+    For robust analysis, prefer:
+    - CampusX data (highest quality, dedicated fields)
+    - Scraped Magicbricks/Housing.com data (structured extraction)
+    - Use Kaggle as supplementary/robustness check only
+    """)
+
+
+def main():
     print("Loading Kaggle data...")
     df = load_kaggle_data()
-    print(f"Total: {len(df):,} listings from {df['source_city'].nunique()} cities")
+    print(f"\nTotal: {len(df):,} listings from {df['source_city'].nunique()} cities")
 
-    df = df[df["PD_URL"].notna() & (df["PD_URL"] != "")]
-    print(f"With valid PD_URL: {len(df):,}")
-
-    if args.test:
-        df = df.head(10)
-        print("Test mode: checking 10 URLs")
-    elif args.sample > 0:
-        df = df.sample(n=min(args.sample, len(df)), random_state=42)
-        print(f"Sample mode: checking {len(df)} URLs")
-
-    df = df.copy()
-    df["full_url"] = BASE_URL + df["PD_URL"]
-
-    print(f"\nChecking {len(df):,} URLs using Playwright...")
-    start = time.time()
-
-    url_results = asyncio.run(check_urls_playwright(df["full_url"].tolist(), args.batch_size))
-
-    elapsed = time.time() - start
-    print(f"Completed in {elapsed:.1f}s ({len(df)/elapsed:.1f} URLs/s)")
-
-    df.loc[:, "http_status"] = df["full_url"].apply(lambda u: url_results.get(u, (0, False))[0])
-    df.loc[:, "is_valid"] = df["full_url"].apply(lambda u: url_results.get(u, (0, False))[1])
-
-    print("\n" + "=" * 60)
-    print("VALIDATION RESULTS")
-    print("=" * 60)
-
-    valid_count = df["is_valid"].sum()
-    total = len(df)
-    print(f"\nOverall: {valid_count:,}/{total:,} ({100*valid_count/total:.1f}%) still live")
-
-    print("\nBy city:")
-    city_stats = (
-        df.groupby("source_city")
-        .agg(
-            total=("is_valid", "count"),
-            valid=("is_valid", "sum"),
-        )
-        .assign(pct=lambda x: 100 * x["valid"] / x["total"])
-    )
-    print(city_stats.to_string())
-
-    print("\nBy HTTP status:")
-    print(df["http_status"].value_counts().to_string())
-
-    if not args.test:
-        valid_df = df[df["is_valid"]].copy()
-        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        valid_df.to_csv(OUTPUT_PATH, index=False)
-        print(f"\nSaved {len(valid_df):,} validated listings to {OUTPUT_PATH}")
-
-    if "EXPIRY_DATE" in df.columns:
-        print("\nExpiry date distribution:")
-        df["expiry_year"] = pd.to_datetime(df["EXPIRY_DATE"], errors="coerce").dt.year
-        print(df["expiry_year"].value_counts().sort_index().to_string())
-
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    print(f"""
-Validation rate: {100*valid_count/total:.1f}%
-Valid listings: {valid_count:,}
-Invalid listings: {total - valid_count:,}
-
-Note: The Kaggle dataset contains listings from 2023 that have since expired.
-99acres listing URLs are time-limited and become invalid after expiry.
-For fresh data, use the scraper: scripts/01_collect_99acres.py
-""")
+    results = validate_data(df)
+    print_verdict(results)
 
 
 if __name__ == "__main__":

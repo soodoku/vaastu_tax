@@ -1,0 +1,18 @@
+[project]
+name = "vaastu-tax"
+version = "0.1.0"
+description = "Analyzing vaastu compliance in Indian real estate listings"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas",
+    "numpy",
+    "statsmodels",
+    "matplotlib",
+    "scikit-learn",
+    "playwright",
+    "pyarrow",
+    "beautifulsoup4",
+]
+
+[dependency-groups]
+dev = []

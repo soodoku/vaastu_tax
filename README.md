@@ -10,48 +10,48 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 
 ### Summary Across Data Sources
 
-| Source | N | Vaastu % | Premium | Sig. |
-|--------|---|----------|---------|------|
-| CampusX (Gurgaon) | 3,916 | 53% | +6.7% | *** |
-| Magicbricks (5 cities) | 26,621 | 39.4% | +3.8% | *** |
-| Housing.com (7 cities) | 1,670 | 16% | +7.1% | n.s. |
+| Source | N | Specification | Premium | 95% CI | Sig. |
+|--------|---|---------------|---------|--------|------|
+| CampusX (Gurgaon) | 3,173 | + sector FE | +2.0% | [-0.5%, 4.6%] | n.s. |
+| Magicbricks (multi-city) | 30,981 | + city FE | +3.8% | [2.9%, 4.8%] | *** |
+| Housing.com (multi-city) | 1,596 | + city FE | +5.6% | [-3.9%, 16.0%] | n.s. |
 
-### Gurugram Prototype (CampusX Data)
+### Aggregate Pooled Analysis
 
-| Specification | N | Vaastu Premium | 95% CI | Significance |
-|--------------|---|----------------|--------|--------------|
-| + sector FE (preferred) | 3,916 | +2.7% | [-0.9%, 6.4%] | n.s. |
-| Matching robustness | 392 | +6.0% | [0.4%, 12.4%] | * |
+| Specification | N | Premium | 95% CI | Sig. |
+|--------------|---|---------|--------|------|
+| Pooled (raw) | 59,895 | +6.2% | [4.4%, 8.0%] | *** |
+| + bhk | 59,895 | +0.5% | [-0.8%, 1.7%] | n.s. |
+| + city FE | 59,895 | +5.6% | [4.4%, 6.9%] | *** |
+| + source FE | 59,895 | +15.4% | [13.9%, 16.9%] | *** |
+| + city + source FE | 59,895 | +11.5% | [10.2%, 12.9%] | *** |
 
-### Housing.com Robustness (by City)
+### Specification Robustness by Source
 
-| City | N | Vaastu % | Premium | Sig. |
-|------|---|----------|---------|------|
-| Mumbai | 270 | 12% | +36.3% | ** |
-| Bangalore | 262 | 16% | +19.3% | n.s. |
-| Pune | 274 | 27% | +5.5% | n.s. |
-| Chennai | 285 | 12% | +0.6% | n.s. |
-| Hyderabad | 277 | 19% | -3.3% | n.s. |
+**CampusX (Gurgaon only):**
+| Specification | N | Premium | Sig. |
+|--------------|---|---------|------|
+| Raw | 3,836 | +45.0% | *** |
+| + bhk | 3,836 | +37.9% | *** |
+| + structural | 3,836 | +6.1% | *** |
+| + sector FE | 3,173 | +2.0% | n.s. |
 
-Key finding: The Vaastu premium in Gurugram is modest once sector FE are included (+2.7%, n.s.). Matching robustness check yields +6.0% (* p<0.05). Housing.com data provides directionally consistent results (+7.1%) but with wider confidence intervals due to lower Vaastu mention rates.
+**Magicbricks (multi-city):**
+| Specification | N | Premium | Sig. |
+|--------------|---|---------|------|
+| Raw | 32,940 | +32.4% | *** |
+| + bhk | 32,940 | +12.6% | *** |
+| + structural | 30,981 | +7.5% | *** |
+| + city FE | 30,981 | +3.8% | *** |
 
-### Magicbricks Multi-City Data
+**Housing.com (multi-city):**
+| Specification | N | Premium | Sig. |
+|--------------|---|---------|------|
+| Raw | 1,599 | +27.4% | *** |
+| + bhk | 1,599 | +12.3% | ** |
+| + city FE | 1,596 | +5.6% | n.s. |
 
-| City | N | Vaastu % | Premium | Sig. |
-|------|---|----------|---------|------|
-| Delhi | 12,368 | 45.4% | +3.8% | *** |
-| Pune | 5,953 | 37.1% | +7.7% | *** |
-| Navi Mumbai | 3,306 | 34.3% | +2.1% | n.s. |
-| Jaipur | 2,089 | 29.8% | +3.9% | * |
-| Lucknow | 1,626 | 33.0% | +3.6% | n.s. |
-| **Total** | **26,621** | **39.4%** | - | - |
-
-#### Fixed Effects Robustness
-
-| Specification | N | Premium | p-value |
-|--------------|---|---------|---------|
-| Project FE | 24,604 | +1.4% | 0.005 |
-| Developer FE | 20,868 | +3.7% | <0.0001 |
+**Key finding**: Raw correlations show 27-45% premiums, but these attenuate substantially with controls and location FE. With city/sector FE, source-specific premiums range from 2-6%. Magicbricks shows a significant +3.8% premium with city FE. Pooled analysis with city + source FE yields +11.5% (***p<0.01, N=59,895).
 
 ## Data Sources
 
@@ -60,7 +60,7 @@ Key finding: The Vaastu premium in Gurugram is modest once sector FE are include
 - **Source**: magicbricks.com listings (apartments, houses, villas)
 - **Collected via**: `scripts/magicbricks/` pipeline (Playwright-based scraper)
 - **Cities**: Delhi-NCR, Pune, Navi Mumbai, Bangalore, Jaipur, Lucknow, Patna, Chandigarh, Rajkot
-- **Sample**: 26,621 listings (sale only, after deduplication and cleaning)
+- **Sample**: 49,845 listings (33,421 after quality filtering for analysis)
 - **Preserves**: Raw HTML for reproducibility
 
 ### 99acres CampusX Data (`data/raw/99acres_campusx/`)

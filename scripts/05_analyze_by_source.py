@@ -10,10 +10,12 @@ Outputs:
 Usage
 -----
 python scripts/05_analyze_by_source.py
+python scripts/05_analyze_by_source.py --export-dir exports/dataverse_v1
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -64,6 +66,12 @@ def load_magicbricks_data() -> pd.DataFrame:
 
     combined = pd.concat(all_data, ignore_index=True)
     combined = combined.drop_duplicates(subset=["property_id"])
+    if "transaction_type" in combined.columns:
+        n_before = len(combined)
+        combined = combined[combined["transaction_type"] == "sale"]
+        n_filtered = n_before - len(combined)
+        if n_filtered > 0:
+            print(f"  (filtered {n_filtered} rental listings)")
     combined["source"] = "magicbricks"
     return combined
 
@@ -94,20 +102,84 @@ def load_housingcom_data() -> pd.DataFrame:
     return combined
 
 
+def load_magicbricks_from_export(export_dir: Path) -> pd.DataFrame:
+    """Load magicbricks data from consolidated export file."""
+    parquet_path = export_dir / "magicbricks_listings.parquet"
+    if not parquet_path.exists():
+        parquet_path = export_dir / "parsed" / "magicbricks_listings.parquet"
+    if not parquet_path.exists():
+        return pd.DataFrame()
+    df = pd.read_parquet(parquet_path)
+    if "transaction_type" in df.columns:
+        n_before = len(df)
+        df = df[df["transaction_type"] == "sale"]
+        n_filtered = n_before - len(df)
+        if n_filtered > 0:
+            print(f"  (filtered {n_filtered} rental listings)")
+    df["source"] = "magicbricks"
+    if "locality" in df.columns and "sector" not in df.columns:
+        df["sector"] = df["locality"]
+    return df
+
+
+def load_housingcom_from_export(export_dir: Path) -> pd.DataFrame:
+    """Load housingcom data from consolidated export file."""
+    parquet_path = export_dir / "housingcom_listings.parquet"
+    if not parquet_path.exists():
+        parquet_path = export_dir / "parsed" / "housingcom_listings.parquet"
+    if not parquet_path.exists():
+        return pd.DataFrame()
+    df = pd.read_parquet(parquet_path)
+    df["source"] = "housingcom"
+    if "locality_line" in df.columns and "sector" not in df.columns:
+        df["sector"] = df["locality_line"]
+    return df
+
+
 def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare data for regression analysis with quality filters."""
     df = df.copy()
     n_start = len(df)
 
     df["price_crore"] = pd.to_numeric(df["price_crore"], errors="coerce")
+    df["builtup_area_sqft"] = pd.to_numeric(df["builtup_area_sqft"], errors="coerce")
     df = df[(df["price_crore"] >= 0.1) & (df["price_crore"] <= 100)]
 
     df["bhk"] = pd.to_numeric(df["bhk"], errors="coerce")
     df = df[(df["bhk"] >= 1) & (df["bhk"] <= 10)]
 
+    df["price_per_sqft"] = (df["price_crore"] * 1e7) / df["builtup_area_sqft"]
+    n_before_ppsf = len(df)
+    df = df[(df["price_per_sqft"].isna()) | ((df["price_per_sqft"] >= 1000) & (df["price_per_sqft"] <= 100000))]
+    n_ppsf_filtered = n_before_ppsf - len(df)
+    if n_ppsf_filtered > 0:
+        print(f"  (filtered {n_ppsf_filtered} rows with outlier price/sqft)")
+
     df["ln_price"] = np.log(df["price_crore"])
     df["ln_area"] = np.log(df["builtup_area_sqft"].replace(0, np.nan))
     df["bathrooms"] = pd.to_numeric(df["bathrooms"], errors="coerce")
+    df["balconies"] = pd.to_numeric(df["balconies"], errors="coerce")
+
+    if "floor_number" in df.columns:
+        df["floor"] = pd.to_numeric(df["floor_number"], errors="coerce")
+    elif "floor_no" in df.columns:
+        df["floor"] = pd.to_numeric(df["floor_no"], errors="coerce")
+    else:
+        df["floor"] = np.nan
+
+    if "property_age" in df.columns:
+        age_map = {
+            "New Construction": 0,
+            "Under Construction": 0,
+            "Less than 5 years": 2,
+            "5 to 10 years": 7,
+            "10 to 15 years": 12,
+            "15 to 20 years": 17,
+            "More than 20 years": 25,
+        }
+        df["age"] = df["property_age"].map(age_map)
+    else:
+        df["age"] = np.nan
 
     n_end = len(df)
     if n_start - n_end > 0:
@@ -184,7 +256,13 @@ def run_regression(
 
 
 def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
-    """Run multiple regression specifications for a single source."""
+    """Run multiple regression specifications for a single source.
+
+    FE structure per manuscript:
+    - campusx: sector FE (single city, Gurgaon)
+    - magicbricks: city FE
+    - housingcom: city FE
+    """
     results = []
     source_df = prepare_data(df)
     source_df = create_feature_dummies(source_df)
@@ -193,8 +271,16 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     has_area = source_df["ln_area"].notna().sum() > 100
     has_bhk = source_df["bhk"].notna().sum() > 100
     has_bath = source_df["bathrooms"].notna().sum() > 100
+    has_balconies = source_df["balconies"].notna().sum() > 50
+    has_floor = source_df["floor"].notna().sum() > 50
+    has_age = source_df["age"].notna().sum() > 50
+    has_facing = ("facing" in source_df.columns) and (source_df["facing"].notna().sum() > 50)
+    has_furnishing = ("furnishing" in source_df.columns) and (source_df["furnishing"].notna().sum() > 50)
     has_sector = ("sector" in source_df.columns) and (source_df["sector"].notna().sum() > 50)
     has_city = ("city" in source_df.columns) and (source_df["city"].nunique() > 1)
+
+    use_sector_fe = source_name == "campusx" and has_sector
+    use_city_fe = source_name in ("magicbricks", "housingcom") and has_city
 
     if not has_price:
         print(f"  {source_name}: insufficient price data, skipping")
@@ -208,16 +294,30 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
         if has_area:
             specs.append(("+ bhk + area", "ln_price ~ vaastu_mentioned + bhk + ln_area"))
             if has_bath:
-                specs.append(("+ structural", "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms"))
+                base_struct = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms"
+                specs.append(("+ structural", base_struct))
 
-    if has_sector:
-        base = "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
-        if has_area and has_bhk:
-            base = "ln_price ~ vaastu_mentioned + bhk + ln_area"
+                controls = ["bathrooms"]
+                if has_balconies:
+                    controls.append("balconies")
+                if has_floor:
+                    controls.append("floor")
+                if has_age:
+                    controls.append("age")
+                if has_facing:
+                    controls.append("C(facing)")
+                if has_furnishing:
+                    controls.append("C(furnishing)")
+
+                if len(controls) > 1:
+                    full_controls = " + ".join(controls)
+                    specs.append(("+ full controls", f"ln_price ~ vaastu_mentioned + bhk + ln_area + {full_controls}"))
+
+    if use_sector_fe:
+        base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
         specs.append(("+ sector FE", f"{base} + C(sector)"))
-
-    if has_city and not has_sector:
-        base = "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
+    elif use_city_fe:
+        base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
         specs.append(("+ city FE", f"{base} + C(city)"))
 
     feat_cols = [c for c in source_df.columns if c.startswith("feat_")]
@@ -353,6 +453,15 @@ def generate_forest_plot(results: list[dict], output_path: Path) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run hedonic regressions by source")
+    parser.add_argument(
+        "--export-dir",
+        type=Path,
+        default=Path("data/v1"),
+        help="Load from consolidated export files instead of per-city files",
+    )
+    args = parser.parse_args()
+
     root = project_root()
     derived_dir = root / "data" / "derived"
     tex_dir = root / "tabs"
@@ -367,21 +476,41 @@ def main() -> None:
     df = pd.read_csv(csv_path, low_memory=False)
     print(f"  99acres: {len(df)} rows")
 
-    print("Loading magicbricks data...")
-    mb_df = load_magicbricks_data()
-    if len(mb_df) > 0:
-        print(f"  magicbricks: {len(mb_df)} rows")
-        df = pd.concat([df, mb_df], ignore_index=True)
-    else:
-        print("  magicbricks: no data found")
+    if args.export_dir:
+        export_dir = args.export_dir if args.export_dir.is_absolute() else root / args.export_dir
+        print(f"Loading from export directory: {export_dir}")
 
-    print("Loading housingcom data...")
-    hc_df = load_housingcom_data()
-    if len(hc_df) > 0:
-        print(f"  housingcom: {len(hc_df)} rows")
-        df = pd.concat([df, hc_df], ignore_index=True)
+        print("Loading magicbricks data from export...")
+        mb_df = load_magicbricks_from_export(export_dir)
+        if len(mb_df) > 0:
+            print(f"  magicbricks: {len(mb_df)} rows")
+            df = pd.concat([df, mb_df], ignore_index=True)
+        else:
+            print("  magicbricks: no data found in export")
+
+        print("Loading housingcom data from export...")
+        hc_df = load_housingcom_from_export(export_dir)
+        if len(hc_df) > 0:
+            print(f"  housingcom: {len(hc_df)} rows")
+            df = pd.concat([df, hc_df], ignore_index=True)
+        else:
+            print("  housingcom: no data found in export")
     else:
-        print("  housingcom: no data found")
+        print("Loading magicbricks data...")
+        mb_df = load_magicbricks_data()
+        if len(mb_df) > 0:
+            print(f"  magicbricks: {len(mb_df)} rows")
+            df = pd.concat([df, mb_df], ignore_index=True)
+        else:
+            print("  magicbricks: no data found")
+
+        print("Loading housingcom data...")
+        hc_df = load_housingcom_data()
+        if len(hc_df) > 0:
+            print(f"  housingcom: {len(hc_df)} rows")
+            df = pd.concat([df, hc_df], ignore_index=True)
+        else:
+            print("  housingcom: no data found")
 
     print(f"  Total: {len(df)} rows")
 

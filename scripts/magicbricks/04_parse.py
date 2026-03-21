@@ -40,26 +40,38 @@ class ListingRecord:
     city: str
     source_page: int
     title: str | None
+    property_type: str | None
     locality: str | None
+    address: str | None
+    latitude: float | None
+    longitude: float | None
     price_display: str | None
     price_crore: float | None
+    price_per_sqft: float | None
     builtup_area_sqft: float | None
     carpet_area_sqft: float | None
     bhk: float | None
     bathrooms: float | None
     balconies: float | None
     furnishing: str | None
+    flooring_type: str | None
     facing: str | None
     possession_status: str | None
     property_age: str | None
     floor_no: int | None
     total_floors: int | None
+    ownership_type: str | None
+    transaction_type: str | None
     amenities: str | None
     description: str | None
     vaastu_mentioned: int
     vaastu_mentions_text: str | None
     seller_type: str | None
+    seller_name: str | None
     posted_date: str | None
+    image_count: int | None
+    is_luxury: bool | None
+    connectivity_score: float | None
     rating_overall: float | None
     rating_connectivity: float | None
     rating_neighbourhood: float | None
@@ -194,139 +206,208 @@ def extract_listings_from_json(
         if isinstance(first_dev, dict):
             developer_name = first_dev.get("developerName")
 
-    for listing in sale_listings + rent_listings:
-        prop_id = listing.get("id")
-        if not prop_id:
-            continue
+    for transaction_type, listings in [("sale", sale_listings), ("rent", rent_listings)]:
+        for listing in listings:
+            prop_id = listing.get("id")
+            if not prop_id:
+                continue
 
-        price = listing.get("price")
-        price_crore = None
-        if price and isinstance(price, (int, float)) and price > 0:
-            if price > 10000:
-                price_crore = price / 10000000
-            else:
-                price_crore = price / 100
+            price = listing.get("price")
+            price_crore = None
+            if price and isinstance(price, (int, float)) and price > 0:
+                if price > 10000:
+                    price_crore = price / 10000000
+                else:
+                    price_crore = price / 100
 
-        price_display = listing.get("priceD")
+            price_display = listing.get("priceD")
 
-        bhk = None
-        bedroom_d = listing.get("bedroomD")
-        if bedroom_d:
-            try:
-                bhk = float(bedroom_d)
-            except (ValueError, TypeError):
-                pass
+            bhk = None
+            bedroom_d = listing.get("bedroomD")
+            if bedroom_d:
+                try:
+                    bhk = float(bedroom_d)
+                except (ValueError, TypeError):
+                    pass
 
-        bathrooms = None
-        bath_d = listing.get("bathD")
-        if bath_d:
-            try:
-                bathrooms = float(bath_d)
-            except (ValueError, TypeError):
-                pass
+            bathrooms = None
+            bath_d = listing.get("bathD")
+            if bath_d:
+                try:
+                    bathrooms = float(bath_d)
+                except (ValueError, TypeError):
+                    pass
 
-        balconies = None
-        balc_d = listing.get("balconiesD")
-        if balc_d:
-            try:
-                balconies = float(balc_d)
-            except (ValueError, TypeError):
-                pass
+            balconies = None
+            balc_d = listing.get("balconiesD")
+            if balc_d:
+                try:
+                    balconies = float(balc_d)
+                except (ValueError, TypeError):
+                    pass
 
-        builtup_area = None
-        ca_sqft = (
-            listing.get("caSqFt") or listing.get("coveredArea") or listing.get("ca")
-        )
-        if ca_sqft:
-            try:
-                builtup_area = float(ca_sqft)
-            except (ValueError, TypeError):
-                pass
-
-        floor_no = None
-        floor_str = listing.get("floorNo")
-        if floor_str:
-            try:
-                floor_no = int(floor_str)
-            except (ValueError, TypeError):
-                pass
-
-        total_floors = None
-        floors_str = listing.get("floors")
-        if floors_str:
-            try:
-                total_floors = int(floors_str)
-            except (ValueError, TypeError):
-                pass
-
-        furnishing = listing.get("furnishedD")
-        possession_status = listing.get("possStatusD")
-        property_age = listing.get("acD")
-
-        locality = listing.get("locSeoName")
-        city_name = listing.get("ctName") or city
-
-        seo_desc = listing.get("seoDesc") or ""
-        auto_desc = listing.get("auto_desc") or ""
-        amenities_str = listing.get("amenities") or ""
-        ad_text = listing.get("ad_text") or ""
-        dtldesc = listing.get("dtldesc") or ""
-        plgdtldesc = listing.get("plgdtldesc") or ""
-
-        combined_text = " ".join(
-            filter(
-                None, [seo_desc, auto_desc, amenities_str, ad_text, dtldesc, plgdtldesc]
+            builtup_area = None
+            ca_sqft = (
+                listing.get("caSqFt") or listing.get("coveredArea") or listing.get("ca")
             )
-        )
-        vaastu_mentioned, vaastu_mentions_text = extract_vaastu_mentions(combined_text)
+            if ca_sqft:
+                try:
+                    builtup_area = float(ca_sqft)
+                except (ValueError, TypeError):
+                    pass
 
-        user_type = listing.get("userType")
+            carpet_area = None
+            carpet_val = listing.get("carpetArea")
+            if carpet_val:
+                try:
+                    carpet_area = float(carpet_val)
+                except (ValueError, TypeError):
+                    pass
 
-        title = None
-        if bhk and listing.get("propTypeD"):
-            title = f"{int(bhk)} BHK {listing.get('propTypeD')}"
-        elif auto_desc:
-            title = auto_desc[:100]
+            facing = listing.get("facingD")
 
-        listing_url = listing.get("url") or project_url
+            posted_date = listing.get("postDateT") or listing.get("postedLabelD")
 
-        record = ListingRecord(
-            property_id=str(prop_id),
-            project_id=project_id,
-            url=listing_url,
-            city=city_name,
-            source_page=source_page,
-            title=title,
-            locality=locality,
-            price_display=price_display,
-            price_crore=price_crore,
-            builtup_area_sqft=builtup_area,
-            carpet_area_sqft=None,
-            bhk=bhk,
-            bathrooms=bathrooms,
-            balconies=balconies,
-            furnishing=furnishing,
-            facing=None,
-            possession_status=possession_status,
-            property_age=property_age,
-            floor_no=floor_no,
-            total_floors=total_floors,
-            amenities=amenities_str if amenities_str else None,
-            description=seo_desc if seo_desc else None,
-            vaastu_mentioned=int(vaastu_mentioned),
-            vaastu_mentions_text=vaastu_mentions_text,
-            seller_type=user_type,
-            posted_date=None,
-            rating_overall=project_ratings["overall"],
-            rating_connectivity=project_ratings["connectivity"],
-            rating_neighbourhood=project_ratings["neighbourhood"],
-            rating_safety=project_ratings["safety"],
-            project_name=listing.get("prjname") or project_name,
-            developer_name=listing.get("devName") or developer_name,
-            collected_at=collected_at,
-            raw_html_path=raw_html_path,
-        )
-        records.append(asdict(record))
+            floor_no = None
+            floor_str = listing.get("floorNo")
+            if floor_str:
+                try:
+                    floor_no = int(floor_str)
+                except (ValueError, TypeError):
+                    pass
+
+            total_floors = None
+            floors_str = listing.get("floors")
+            if floors_str:
+                try:
+                    total_floors = int(floors_str)
+                except (ValueError, TypeError):
+                    pass
+
+            furnishing = listing.get("furnishedD")
+            flooring_type = listing.get("flooringTyD")
+            possession_status = listing.get("possStatusD")
+            property_age = listing.get("acD")
+            ownership_type = listing.get("OwnershipTypeD")
+            transaction_type = listing.get("transactionTypeD")
+
+            locality = listing.get("locSeoName")
+            address = listing.get("psmAdd")
+            city_name = listing.get("ctName") or city
+
+            latitude = None
+            longitude = None
+            coords = listing.get("ltcoordGeo")
+            if coords and "," in str(coords):
+                try:
+                    lat_str, lon_str = str(coords).split(",")
+                    latitude = float(lat_str)
+                    longitude = float(lon_str)
+                except (ValueError, TypeError):
+                    pass
+
+            price_per_sqft = None
+            sqft_price = listing.get("sqFtPrice")
+            if sqft_price:
+                try:
+                    price_per_sqft = float(sqft_price)
+                except (ValueError, TypeError):
+                    pass
+
+            image_count = None
+            img_ct = listing.get("imgCt")
+            if img_ct:
+                try:
+                    image_count = int(img_ct)
+                except (ValueError, TypeError):
+                    pass
+
+            is_luxury = listing.get("isLuxury") == "T"
+
+            connectivity_score = None
+            c_score = listing.get("cScore")
+            if c_score:
+                try:
+                    connectivity_score = float(c_score)
+                except (ValueError, TypeError):
+                    pass
+
+            property_type = listing.get("propTypeD")
+            seller_name = listing.get("oname")
+
+            seo_desc = listing.get("seoDesc") or ""
+            auto_desc = listing.get("auto_desc") or ""
+            amenities_str = listing.get("amenities") or ""
+            ad_text = listing.get("ad_text") or ""
+            dtldesc = listing.get("dtldesc") or ""
+            plgdtldesc = listing.get("plgdtldesc") or ""
+
+            combined_text = " ".join(
+                filter(
+                    None, [seo_desc, auto_desc, amenities_str, ad_text, dtldesc, plgdtldesc]
+                )
+            )
+            vaastu_mentioned, vaastu_mentions_text = extract_vaastu_mentions(combined_text)
+
+            user_type = listing.get("userType")
+
+            title = None
+            if bhk and listing.get("propTypeD"):
+                title = f"{int(bhk)} BHK {listing.get('propTypeD')}"
+            elif auto_desc:
+                title = auto_desc[:100]
+
+            listing_url = listing.get("url") or project_url
+
+            record = ListingRecord(
+                property_id=str(prop_id),
+                project_id=project_id,
+                url=listing_url,
+                city=city_name,
+                source_page=source_page,
+                title=title,
+                property_type=property_type,
+                locality=locality,
+                address=address,
+                latitude=latitude,
+                longitude=longitude,
+                price_display=price_display,
+                price_crore=price_crore,
+                price_per_sqft=price_per_sqft,
+                builtup_area_sqft=builtup_area,
+                carpet_area_sqft=carpet_area,
+                bhk=bhk,
+                bathrooms=bathrooms,
+                balconies=balconies,
+                furnishing=furnishing,
+                flooring_type=flooring_type,
+                facing=facing,
+                possession_status=possession_status,
+                property_age=property_age,
+                floor_no=floor_no,
+                total_floors=total_floors,
+                ownership_type=ownership_type,
+                transaction_type=transaction_type,
+                amenities=amenities_str if amenities_str else None,
+                description=seo_desc if seo_desc else None,
+                vaastu_mentioned=int(vaastu_mentioned),
+                vaastu_mentions_text=vaastu_mentions_text,
+                seller_type=user_type,
+                seller_name=seller_name,
+                posted_date=posted_date,
+                image_count=image_count,
+                is_luxury=is_luxury,
+                connectivity_score=connectivity_score,
+                rating_overall=project_ratings["overall"],
+                rating_connectivity=project_ratings["connectivity"],
+                rating_neighbourhood=project_ratings["neighbourhood"],
+                rating_safety=project_ratings["safety"],
+                project_name=listing.get("prjname") or project_name,
+                developer_name=listing.get("devName") or developer_name,
+                collected_at=collected_at,
+                raw_html_path=raw_html_path,
+            )
+            records.append(asdict(record))
 
     return records
 

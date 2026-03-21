@@ -12,8 +12,6 @@ python scripts/magicbricks/01_collect_search.py --city delhi-ncr_apartment --res
 python scripts/magicbricks/01_collect_search.py --city delhi-ncr_apartment --retry-errors
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import random

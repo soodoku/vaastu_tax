@@ -1,14 +1,11 @@
 """Shared utilities for browser-based scraping."""
 
-from __future__ import annotations
-
 import logging
 import os
 import random
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
@@ -33,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging(
-    verbose: bool = False, quiet: bool = False, log_file: Optional[str] = None
+    verbose: bool = False, quiet: bool = False, log_file: str | None = None
 ) -> None:
     """Configure logging for scraping scripts."""
     if quiet:
@@ -43,7 +40,7 @@ def setup_logging(
     else:
         level = logging.INFO
 
-    handlers: List[logging.Handler] = []
+    handlers: list[logging.Handler] = []
 
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
@@ -59,13 +56,13 @@ def setup_logging(
     logging.basicConfig(level=level, handlers=handlers, force=True)
 
 
-def parse_proxy_url(proxy_url: Optional[str]) -> Optional[Dict[str, Any]]:
+def parse_proxy_url(proxy_url: str | None) -> dict | None:
     """Parse proxy URL into Playwright proxy config."""
     if not proxy_url:
         return None
     parsed = urlsplit(proxy_url)
     scheme = parsed.scheme or "http"
-    config: Dict[str, Any] = {"server": f"{scheme}://{parsed.hostname}:{parsed.port}"}
+    config: dict = {"server": f"{scheme}://{parsed.hostname}:{parsed.port}"}
     if parsed.username:
         config["username"] = parsed.username
     if parsed.password:
@@ -73,7 +70,7 @@ def parse_proxy_url(proxy_url: Optional[str]) -> Optional[Dict[str, Any]]:
     return config
 
 
-def get_proxy(proxy_arg: Optional[str] = None) -> Optional[str]:
+def get_proxy(proxy_arg: str | None = None) -> str | None:
     """Get proxy URL from argument or environment."""
     return proxy_arg or os.environ.get("BRIGHT_DATA_PROXY_URL")
 
@@ -82,7 +79,7 @@ class RobotsGuard:
     """Check robots.txt compliance for URLs."""
 
     def __init__(
-        self, root_url: str, user_agent: str = USER_AGENT, proxy: Optional[str] = None
+        self, root_url: str, user_agent: str = USER_AGENT, proxy: str | None = None
     ) -> None:
         self.root_url = root_url.rstrip("/")
         self.user_agent = user_agent
@@ -163,7 +160,7 @@ def fetch_with_retry(
     url: str,
     wait_ms: int = 3000,
     max_retries: int = MAX_RETRIES,
-) -> Tuple[str, str, bool]:
+) -> tuple[str, str, bool]:
     """Fetch URL with retry logic on failure or blocking."""
     for attempt in range(max_retries):
         try:
@@ -211,7 +208,7 @@ def fetch_with_retry(
     return "", "", False
 
 
-def load_city_config(path: Path) -> Dict[str, str]:
+def load_city_config(path: Path) -> dict[str, str]:
     """Load city configuration JSON."""
     import json
 
@@ -222,7 +219,7 @@ def load_city_config(path: Path) -> Dict[str, str]:
     return data
 
 
-def city_outdir(city: str, base_dir: Optional[Path] = None) -> Path:
+def city_outdir(city: str, base_dir: Path | None = None) -> Path:
     """Get output directory for a city."""
     from .parsing import project_root
 
@@ -234,7 +231,7 @@ def city_outdir(city: str, base_dir: Optional[Path] = None) -> Path:
 def create_browser_context(
     playwright,
     headless: bool = False,
-    proxy: Optional[str] = None,
+    proxy: str | None = None,
     timeout_ms: int = 60000,
 ):
     """Create Playwright browser context with anti-detection settings."""

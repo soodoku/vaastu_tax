@@ -11,8 +11,6 @@ python scripts/magicbricks/04_parse.py --all-cities
 python scripts/magicbricks/04_parse.py --city delhi-ncr_apartment --force
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import sys
@@ -346,6 +344,10 @@ def read_existing_property_ids(parquet_path: Path) -> set[str]:
 def parse_city(city: str, city_dir: Path, force: bool) -> dict:
     detail_manifest_path = city_dir / "detail_manifest.jsonl"
     parsed_parquet = city_dir / "parsed_listings.parquet"
+
+    if not detail_manifest_path.exists():
+        logger.warning("[%s] No detail_manifest.jsonl found", city)
+        return {"city": city, "parsed": 0, "skipped": 0, "errors": 0}
 
     entries = load_manifest(detail_manifest_path)
     successful_entries = [e for e in entries if e.get("status") == "success"]

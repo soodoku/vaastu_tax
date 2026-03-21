@@ -12,8 +12,6 @@ python scripts/magicbricks/03_collect_detail.py --city delhi-ncr_apartment --ret
 python scripts/magicbricks/03_collect_detail.py --all-cities --max-pages 100
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import random

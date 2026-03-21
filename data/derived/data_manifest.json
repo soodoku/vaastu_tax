@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-03-16T19:23:39.909108",
+  "generated_at": "2026-03-19T20:49:30.226210",
   "statistics": {
-    "total_listings": 46271,
-    "vaastu_mentioned_count": 4244,
-    "vaastu_mention_rate": 9.172051608999157,
+    "total_listings": 42504,
+    "vaastu_mentioned_count": 4258,
+    "vaastu_mention_rate": 10.017880670054582,
     "by_source": {
       "campusx": {
-        "count": 7764,
+        "count": 3961,
         "vaastu_count": 2104,
-        "vaastu_rate": 27.1
+        "vaastu_rate": 53.12
       },
       "kaggle_arvanshul": {
         "count": 38502,
@@ -16,16 +16,21 @@
         "vaastu_rate": 5.55
       },
       "our_scraper": {
-        "count": 5,
-        "vaastu_count": 5,
-        "vaastu_rate": 100.0
+        "count": 41,
+        "vaastu_count": 19,
+        "vaastu_rate": 46.34
       }
     },
     "by_city": {
+      "bangalore": {
+        "count": 36,
+        "vaastu_count": 14,
+        "vaastu_rate": 38.89
+      },
       "gurgaon": {
-        "count": 18473,
+        "count": 14670,
         "vaastu_count": 2591,
-        "vaastu_rate": 14.03
+        "vaastu_rate": 17.66
       },
       "hyderabad": {
         "count": 9487,
@@ -50,14 +55,14 @@
         "vaastu_rate": 2.5
       },
       "flat": {
-        "count": 5940,
+        "count": 2997,
         "vaastu_count": 1702,
-        "vaastu_rate": 28.65
+        "vaastu_rate": 56.79
       },
       "house": {
-        "count": 1829,
-        "vaastu_count": 407,
-        "vaastu_rate": 22.25
+        "count": 1005,
+        "vaastu_count": 421,
+        "vaastu_rate": 41.89
       },
       "independent house/villa": {
         "count": 2951,
@@ -97,20 +102,20 @@
     },
     "field_coverage": {
       "price_crore": {
-        "non_null": 37436,
-        "coverage_pct": 80.91
+        "non_null": 33669,
+        "coverage_pct": 79.21
       },
       "builtup_area_sqft": {
-        "non_null": 19841,
-        "coverage_pct": 42.88
+        "non_null": 16087,
+        "coverage_pct": 37.85
       },
       "bhk": {
-        "non_null": 42716,
-        "coverage_pct": 92.32
+        "non_null": 38948,
+        "coverage_pct": 91.63
       },
       "bathrooms": {
-        "non_null": 18473,
-        "coverage_pct": 39.92
+        "non_null": 14689,
+        "coverage_pct": 34.56
       }
     }
   },

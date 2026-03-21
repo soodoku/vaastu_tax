@@ -10,8 +10,6 @@ python scripts/magicbricks/02_extract_urls.py --city delhi-ncr_apartment
 python scripts/magicbricks/02_extract_urls.py --all-cities
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import re

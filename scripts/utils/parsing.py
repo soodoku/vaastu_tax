@@ -1,14 +1,12 @@
 """Shared parsing utilities for property listing extraction."""
 
-from __future__ import annotations
-
 import csv
 import gzip
 import json
 import re
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
 
 import pandas as pd
 
@@ -87,7 +85,7 @@ RE_SHOWING = re.compile(r"Showing\s+\d+\s*-\s*\d+\s+of\s+([\d,]+)", re.I)
 RE_RESULTS_COUNT = re.compile(r"(\d[\d,]*)\s+results?\b", re.I)
 
 
-def normalize_ws(text: Optional[str]) -> str:
+def normalize_ws(text: str | None) -> str:
     """Normalize whitespace in text."""
     if not text:
         return ""
@@ -101,13 +99,13 @@ def slugify(text: str) -> str:
     return text or "na"
 
 
-def extract_lines(text: str) -> List[str]:
+def extract_lines(text: str) -> list[str]:
     """Extract non-empty lines from text."""
     lines = [normalize_ws(x) for x in text.splitlines()]
     return [x for x in lines if x]
 
 
-def price_to_crore(raw: Optional[str]) -> Optional[float]:
+def price_to_crore(raw: str | None) -> float | None:
     """Convert price string to crore value."""
     if not raw:
         return None
@@ -130,7 +128,7 @@ def price_to_crore(raw: Optional[str]) -> Optional[float]:
     return None
 
 
-def number_from_match(pattern: re.Pattern[str], text: str) -> Optional[float]:
+def number_from_match(pattern: re.Pattern[str], text: str) -> float | None:
     """Extract first number from regex match."""
     m = pattern.search(text)
     if not m:
@@ -138,7 +136,7 @@ def number_from_match(pattern: re.Pattern[str], text: str) -> Optional[float]:
     return float(m.group(1).replace(",", ""))
 
 
-def normalize_direction(text: Optional[str]) -> Optional[str]:
+def normalize_direction(text: str | None) -> str | None:
     """Normalize compass direction text."""
     if not text:
         return None
@@ -163,7 +161,7 @@ def normalize_direction(text: Optional[str]) -> Optional[str]:
     return normalize_ws(text)
 
 
-def find_price_display(lines: Sequence[str], title_idx: Optional[int] = None) -> Optional[str]:
+def find_price_display(lines: Sequence[str], title_idx: int | None = None) -> str | None:
     """Find price display line in listing text."""
     start = title_idx + 1 if title_idx is not None else 0
     for line in lines[start : start + 10]:
@@ -175,7 +173,7 @@ def find_price_display(lines: Sequence[str], title_idx: Optional[int] = None) ->
     return None
 
 
-def find_first_matching_line(lines: Sequence[str], pattern: re.Pattern[str]) -> Optional[str]:
+def find_first_matching_line(lines: Sequence[str], pattern: re.Pattern[str]) -> str | None:
     """Find first line matching a regex pattern."""
     for line in lines:
         if pattern.search(line):
@@ -186,9 +184,9 @@ def find_first_matching_line(lines: Sequence[str], pattern: re.Pattern[str]) -> 
 def extract_section(
     lines: Sequence[str],
     heading: str,
-    stop_heads: Optional[set[str]] = None,
+    stop_heads: set[str] | None = None,
     max_lines: int = 20,
-) -> Optional[str]:
+) -> str | None:
     """Extract text section following a heading."""
     if stop_heads is None:
         stop_heads = {
@@ -210,7 +208,7 @@ def extract_section(
     if start is None:
         return None
 
-    buffer: List[str] = []
+    buffer: list[str] = []
     for line in lines[start:]:
         line_l = line.lower().strip()
         if line_l in stop_heads:
@@ -222,7 +220,7 @@ def extract_section(
     return out or None
 
 
-def write_csv(path: Path, rows: List[dict], fieldnames: Sequence[str]) -> None:
+def write_csv(path: Path, rows: list[dict], fieldnames: Sequence[str]) -> None:
     """Write rows to CSV file."""
     with open(path, "w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
@@ -238,7 +236,7 @@ def write_jsonl(path: Path, rows: Iterable[dict]) -> None:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def load_manifest(manifest_path: Path) -> List[dict]:
+def load_manifest(manifest_path: Path) -> list[dict]:
     """Load scrape manifest JSONL file."""
     if not manifest_path.exists():
         return []
@@ -267,7 +265,7 @@ def read_existing_property_ids(parsed_csv: Path) -> set[str]:
         return set()
 
 
-def extract_next_data(html: str) -> Optional[Dict]:
+def extract_next_data(html: str) -> dict | None:
     """Extract __NEXT_DATA__ JSON from Next.js pages."""
     pattern = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
     m = pattern.search(html)
@@ -279,7 +277,7 @@ def extract_next_data(html: str) -> Optional[Dict]:
         return None
 
 
-def normalize_price_to_crore(price: Optional[float]) -> Optional[float]:
+def normalize_price_to_crore(price: float | None) -> float | None:
     """Normalize price value to crore.
 
     Handles both already-normalized values (< 100) and raw rupee values (> 100).
@@ -297,7 +295,7 @@ def normalize_price_to_crore(price: Optional[float]) -> Optional[float]:
     return price
 
 
-def write_parquet(path: Path, rows: List[dict]) -> None:
+def write_parquet(path: Path, rows: list[dict]) -> None:
     """Write rows to Parquet file with zstd compression."""
     df = pd.DataFrame(rows)
     df.to_parquet(path, index=False, compression="zstd")

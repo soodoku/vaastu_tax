@@ -58,7 +58,7 @@ Key finding: The Vaastu premium in Gurugram is modest once sector FE are include
 ### Magicbricks Multi-City Data (`data/raw/magicbricks/<city>/`)
 
 - **Source**: magicbricks.com listings (apartments, houses, villas)
-- **Collected via**: `scripts/01_collect_magicbricks.py` (Playwright-based scraper)
+- **Collected via**: `scripts/magicbricks/` pipeline (Playwright-based scraper)
 - **Cities**: Delhi-NCR, Pune, Navi Mumbai, Bangalore, Jaipur, Lucknow, Patna, Chandigarh, Rajkot
 - **Sample**: 26,621 listings (sale only, after deduplication and cleaning)
 - **Preserves**: Raw HTML for reproducibility
@@ -103,47 +103,84 @@ Key finding: The Vaastu premium in Gurugram is modest once sector FE are include
 
 ```
 scripts/
-  01_collect_magicbricks.py    # Scrape Magicbricks listings
-  01_collect_99acres.py        # Scrape 99acres.com listings
-  01_collect_housingcom.py     # Scrape Housing.com listings
-  02_parse_magicbricks.py      # Parse Magicbricks HTML to parquet
-  02_parse_99acres.py          # Parse 99acres HTML to parquet
-  02_parse_housingcom.py       # Parse Housing.com HTML to parquet
-  04_analyze_magicbricks.py    # Magicbricks hedonic regressions
-  04_analyze_housingcom.py     # Housing.com hedonic regressions
-  05_validate_kaggle.py        # Kaggle data quality checks
-  utils/                       # Shared utilities (parsing, analysis)
+├── 01_collect_*.py              # Data collection (99acres, Housing.com, Magicbricks)
+├── 02_parse_*.py                # Parse HTML to parquet
+├── 02_analyze.py                # Main analysis script (99acres/CampusX)
+├── 02_download_kaggle.py        # Download Kaggle dataset
+├── 03_unify_99acres.py          # Unify 99acres data sources
+├── 04_analyze_*.py              # Source-specific hedonic regressions
+├── 04_rationalize_covariates.py # Covariate harmonization
+├── 05_analyze_by_source.py      # Cross-source comparison
+├── 05_validate_kaggle.py        # Kaggle data quality checks
+├── utils/                       # Shared utilities module
+│   ├── __init__.py
+│   ├── parsing.py               # File I/O, regex patterns, data extraction
+│   ├── scraping.py              # Browser automation, proxy, retry logic
+│   ├── feature_extraction.py    # Vaastu detection, sector/city parsing
+│   └── analysis.py              # Hedonic regression utilities
+└── magicbricks/                 # MagicBricks 4-step pipeline
+    ├── 01_collect_search.py     # Collect search result pages
+    ├── 02_extract_urls.py       # Extract property URLs from search
+    ├── 03_collect_detail.py     # Collect individual property pages
+    └── 04_parse.py              # Parse HTML to parquet
+
 data/
-  raw/magicbricks/<city>/   # Magicbricks scraped data
-  raw/99acres_campusx/      # 99acres data from campusx repo (Gurugram)
-  raw/99acres/<city>/       # 99acres scraped data (multi-city)
-  raw/housingcom/<city>/    # Housing.com scraped data
-  raw/99acres_kaggle/       # Kaggle dataset (arvanshul)
-  config/                   # City URL configurations
-  derived/                  # Analysis samples
-ms/                         # LaTeX manuscript
-tabs/                       # Generated tables
-figs/                       # Generated figures
+├── raw/
+│   ├── magicbricks/<city>/      # Magicbricks scraped data
+│   ├── 99acres/<city>/          # 99acres scraped data (multi-city)
+│   ├── 99acres_campusx/         # 99acres data from CampusX repo (Gurugram)
+│   ├── housingcom/<city>/       # Housing.com scraped data
+│   └── kaggle_arvanshul/        # Kaggle dataset (arvanshul)
+├── config/                      # City URL configurations
+└── derived/                     # Analysis samples, unified datasets
+
+ms/                              # LaTeX manuscript
+tabs/                            # Generated tables
+figs/                            # Generated figures
 ```
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.10+
+- [uv](https://github.com/astral-sh/uv) package manager
+
+### Installation
+
 ```bash
-# Using uv (recommended)
 uv sync
 uv run playwright install chromium
+```
 
-# Collect Magicbricks data
-uv run python scripts/01_collect_magicbricks.py --city delhi-ncr --max-pages 5
+### Data Collection
 
-# Parse collected data
-uv run python scripts/02_parse_magicbricks.py --all-cities --force
+**Magicbricks** (4-step pipeline):
+```bash
+uv run python scripts/magicbricks/01_collect_search.py --city delhi
+uv run python scripts/magicbricks/02_extract_urls.py --city delhi
+uv run python scripts/magicbricks/03_collect_detail.py --city delhi
+uv run python scripts/magicbricks/04_parse.py --city delhi
+```
 
-# Run analysis
+**99acres**:
+```bash
+uv run python scripts/01_collect_99acres.py --city bangalore --max-pages 10
+uv run python scripts/02_parse_99acres.py --city bangalore
+```
+
+**Housing.com**:
+```bash
+uv run python scripts/01_collect_housingcom.py --city mumbai --max-pages 10
+uv run python scripts/02_parse_housingcom.py --city mumbai
+```
+
+### Analysis
+
+```bash
 uv run python scripts/04_analyze_magicbricks.py
-
-# Validate Kaggle data quality
-uv run python scripts/05_validate_kaggle.py
+uv run python scripts/04_analyze_housingcom.py
+uv run python scripts/05_analyze_by_source.py
 ```
 
 ## Caveats

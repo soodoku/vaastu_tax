@@ -1,0 +1,57 @@
+{
+  "delhi-ncr_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Delhi-NCR",
+  "delhi-ncr_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Delhi-NCR",
+  "delhi-ncr_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Delhi-NCR",
+  "delhi-ncr_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Delhi-NCR",
+  "delhi-ncr_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Delhi-NCR",
+  "delhi-ncr_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Delhi-NCR",
+
+  "chandigarh_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Chandigarh",
+  "chandigarh_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Chandigarh",
+  "chandigarh_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Chandigarh",
+  "chandigarh_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Chandigarh",
+  "chandigarh_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Chandigarh",
+  "chandigarh_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Chandigarh",
+
+  "lucknow_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Lucknow",
+  "lucknow_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Lucknow",
+  "lucknow_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Lucknow",
+  "lucknow_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Lucknow",
+  "lucknow_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Lucknow",
+  "lucknow_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Lucknow",
+
+  "patna_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Patna",
+  "patna_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Patna",
+  "patna_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Patna",
+  "patna_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Patna",
+  "patna_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Patna",
+  "patna_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Patna",
+
+  "jaipur_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Jaipur",
+  "jaipur_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Jaipur",
+  "jaipur_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Jaipur",
+  "jaipur_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Jaipur",
+  "jaipur_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Jaipur",
+  "jaipur_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Jaipur",
+
+  "rajkot_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Rajkot",
+  "rajkot_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Rajkot",
+  "rajkot_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Rajkot",
+  "rajkot_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Rajkot",
+  "rajkot_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Rajkot",
+  "rajkot_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Rajkot",
+
+  "pune_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Pune",
+  "pune_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Pune",
+  "pune_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Pune",
+  "pune_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Pune",
+  "pune_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Pune",
+  "pune_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Pune",
+
+  "navi-mumbai_apartment": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Multistorey-Apartment&cityName=Navi-Mumbai",
+  "navi-mumbai_builder-floor": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Builder-Floor-Apartment&cityName=Navi-Mumbai",
+  "navi-mumbai_penthouse": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Penthouse&cityName=Navi-Mumbai",
+  "navi-mumbai_studio": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Studio-Apartment&cityName=Navi-Mumbai",
+  "navi-mumbai_house": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Residential-House&cityName=Navi-Mumbai",
+  "navi-mumbai_villa": "https://www.magicbricks.com/property-for-sale/residential-real-estate?proptype=Villa&cityName=Navi-Mumbai"
+}

@@ -1,9 +1,5 @@
 # Vaastu WTP
 
-Estimating willingness to pay for Vaastu compliance in Indian residential real estate.
-
-## Research Question
-
 Do buyers pay a premium for Vaastu-compliant homes? How much?
 
 ## Key Findings

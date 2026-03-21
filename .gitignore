@@ -14,3 +14,4 @@
 
 # Scraped pages (HTML files)
 **/pages/
+/scripts/magicbricks/__pycache__

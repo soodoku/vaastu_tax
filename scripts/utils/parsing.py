@@ -3,15 +3,55 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
 import pandas as pd
 
+
+def project_root() -> Path:
+    """Return the project root directory."""
+    return Path(__file__).resolve().parents[2]
+
+
+def ensure_dir(path: Path) -> Path:
+    """Create directory if it doesn't exist."""
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def now_iso() -> str:
+    """Return current UTC time as ISO string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def read_html_gz(path: Path) -> str:
+    """Read gzip-compressed HTML file."""
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        return fh.read()
+
+
+def write_html_gz(path: Path, html: str) -> None:
+    """Write HTML to gzip-compressed file."""
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        fh.write(html)
+
+
+def append_jsonl(path: Path, rows: Iterable[dict]) -> None:
+    """Append rows to JSONL file."""
+    with open(path, "a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 # Common regex patterns
-RE_PRICE_UNIT = re.compile(r"₹?\s*([0-9][\d,]*(?:\.\d+)?)\s*(Cr|Crore|L|Lac|Lakh|Lakhs|K)?\b", re.I)
+RE_PRICE_UNIT = re.compile(
+    r"₹?\s*([0-9][\d,]*(?:\.\d+)?)\s*(Cr|Crore|L|Lac|Lakh|Lakhs|K)?\b", re.I
+)
 RE_BHK = re.compile(r"(\d+(?:\.\d+)?)\s*BHK\b", re.I)
 RE_SQFT = re.compile(r"([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft|square feet)\b", re.I)
 RE_CARPET = re.compile(r"carpet\s*(?:area)?[:\s]*([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft)?", re.I)

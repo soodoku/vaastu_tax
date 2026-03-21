@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Run the full MagicBricks scraping pipeline for specified cities.
 
-Executes all 4 steps sequentially for each city:
+Executes all 6 steps sequentially for each city:
 1. Collect search pages
-2. Extract URLs
-3. Collect detail pages
-4. Parse to parquet
+2. Extract URLs (project + listing URLs from search)
+3. Collect project pages
+4. Extract listing URLs from projects
+5. Collect listing pages
+6. Parse to parquet
 
 Example
 -------
@@ -21,8 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.utils import project_root
-from scripts.utils.scraping import logger, setup_logging
+from scripts.utils import project_root  # noqa: E402
+from scripts.utils.scraping import logger, setup_logging  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,10 +47,16 @@ def parse_args() -> argparse.Namespace:
         help="Max search pages per city (default: 50)",
     )
     parser.add_argument(
-        "--max-detail-pages",
+        "--max-project-pages",
         type=int,
         default=500,
-        help="Max detail pages per city (default: 500)",
+        help="Max project pages per city (default: 500)",
+    )
+    parser.add_argument(
+        "--max-listing-pages",
+        type=int,
+        default=500,
+        help="Max listing pages per city (default: 500)",
     )
     parser.add_argument(
         "--headless",
@@ -119,28 +127,47 @@ def run_pipeline_for_city(city: str, args: argparse.Namespace) -> dict:
         logger.error("[%s] Step 1 (collect_search) failed", city)
         return results
 
-    # Step 2: Extract URLs
+    # Step 2: Extract URLs (both project and listing URLs)
     success = run_step("02_extract_urls.py", city, ["-v"] if args.verbose else [])
     results["steps"]["extract_urls"] = success
     if not success:
         logger.error("[%s] Step 2 (extract_urls) failed", city)
         return results
 
-    # Step 3: Collect detail pages
-    step3_args = common_args + ["--max-pages", str(args.max_detail_pages)]
+    # Step 3: Collect project pages
+    step3_args = common_args + ["--max-pages", str(args.max_project_pages)]
     if args.resume:
         step3_args.append("--resume")
-    success = run_step("03_collect_detail.py", city, step3_args)
-    results["steps"]["collect_detail"] = success
+    success = run_step("03_collect_projects.py", city, step3_args)
+    results["steps"]["collect_projects"] = success
     if not success:
-        logger.error("[%s] Step 3 (collect_detail) failed", city)
+        logger.error("[%s] Step 3 (collect_projects) failed", city)
         return results
 
-    # Step 4: Parse to parquet
-    success = run_step("04_parse.py", city, ["-v"] if args.verbose else [])
+    # Step 4: Extract listing URLs from projects
+    success = run_step(
+        "04_extract_listing_urls.py", city, ["-v"] if args.verbose else []
+    )
+    results["steps"]["extract_listing_urls"] = success
+    if not success:
+        logger.error("[%s] Step 4 (extract_listing_urls) failed", city)
+        return results
+
+    # Step 5: Collect listing pages
+    step5_args = common_args + ["--max-pages", str(args.max_listing_pages)]
+    if args.resume:
+        step5_args.append("--resume")
+    success = run_step("05_collect_listings.py", city, step5_args)
+    results["steps"]["collect_listings"] = success
+    if not success:
+        logger.error("[%s] Step 5 (collect_listings) failed", city)
+        return results
+
+    # Step 6: Parse to parquet
+    success = run_step("06_parse.py", city, ["-v"] if args.verbose else [])
     results["steps"]["parse"] = success
     if not success:
-        logger.error("[%s] Step 4 (parse) failed", city)
+        logger.error("[%s] Step 6 (parse) failed", city)
         return results
 
     logger.info("[%s] Pipeline completed successfully", city)

@@ -176,10 +176,17 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
             "10 to 15 years": 12,
             "15 to 20 years": 17,
             "More than 20 years": 25,
+            "Above 20 years": 25,
         }
         df["age"] = df["property_age"].map(age_map)
     else:
         df["age"] = np.nan
+
+    if "total_floors" in df.columns:
+        df["total_floors"] = pd.to_numeric(df["total_floors"], errors="coerce")
+
+    if "possession_status" in df.columns:
+        df["ready_to_move"] = df["possession_status"].str.lower().str.contains("ready|immediate", na=False).astype(int)
 
     n_end = len(df)
     if n_start - n_end > 0:
@@ -278,6 +285,10 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     has_furnishing = ("furnishing" in source_df.columns) and (source_df["furnishing"].notna().sum() > 50)
     has_sector = ("sector" in source_df.columns) and (source_df["sector"].notna().sum() > 50)
     has_city = ("city" in source_df.columns) and (source_df["city"].nunique() > 1)
+    has_locality = ("locality" in source_df.columns) and (source_df["locality"].nunique() > 10)
+    has_seller_type = ("seller_type" in source_df.columns) and (source_df["seller_type"].notna().sum() > 50)
+    has_total_floors = ("total_floors" in source_df.columns) and (source_df["total_floors"].notna().sum() > 50)
+    has_ready_to_move = ("ready_to_move" in source_df.columns) and (source_df["ready_to_move"].notna().sum() > 50)
 
     use_sector_fe = source_name == "campusx" and has_sector
     use_city_fe = source_name in ("magicbricks", "housingcom") and has_city
@@ -308,6 +319,12 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
                     controls.append("C(facing)")
                 if has_furnishing:
                     controls.append("C(furnishing)")
+                if has_total_floors:
+                    controls.append("total_floors")
+                if has_ready_to_move:
+                    controls.append("ready_to_move")
+                if has_seller_type:
+                    controls.append("C(seller_type)")
 
                 if len(controls) > 1:
                     full_controls = " + ".join(controls)
@@ -319,6 +336,10 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     elif use_city_fe:
         base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
         specs.append(("+ city FE", f"{base} + C(city)"))
+
+    if source_name == "magicbricks" and has_locality:
+        base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
+        specs.append(("+ locality FE", f"{base} + C(locality)"))
 
     feat_cols = [c for c in source_df.columns if c.startswith("feat_")]
     if feat_cols and has_bhk and has_area:
@@ -407,10 +428,18 @@ def generate_forest_plot(results: list[dict], output_path: Path) -> None:
         print("  matplotlib not available, skipping forest plot")
         return
 
-    main_results = []
+    # Pick one FE result per source (prefer most stringent: locality > sector > city)
+    fe_priority = {"+ locality FE": 0, "+ sector FE": 1, "+ city FE": 2}
+    source_best = {}
     for r in results:
-        if r.get("spec_name") and "FE" in r["spec_name"]:
-            main_results.append(r)
+        spec = r.get("spec_name", "")
+        if spec not in fe_priority:
+            continue
+        source = r["source"]
+        if source not in source_best or fe_priority[spec] < fe_priority.get(source_best[source].get("spec_name"), 99):
+            source_best[source] = r
+
+    main_results = list(source_best.values())
     if not main_results:
         main_results = [r for r in results if r.get("spec_name") == "+ bhk"]
     if not main_results:

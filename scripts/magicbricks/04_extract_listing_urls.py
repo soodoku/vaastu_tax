@@ -20,18 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from bs4 import BeautifulSoup  # noqa: E402
 
-from scripts.utils import (  # noqa: E402
-    load_manifest,
-    now_iso,
-    project_root,
-    read_html_gz,
-    slugify,
-)
-from scripts.utils.scraping import (  # noqa: E402
-    city_outdir,
-    logger,
-    setup_logging,
-)
+from scripts.utils import (load_manifest, now_iso, project_root,  # noqa: E402
+                           read_html_gz, slugify)
+from scripts.utils.scraping import (city_outdir, logger,  # noqa: E402
+                                    setup_logging)
 
 BASE_LISTING_URL = "https://www.magicbricks.com/propertyDetails/"
 
@@ -87,9 +79,7 @@ def extract_preloaded_state(html: str) -> dict | None:
     return None
 
 
-def extract_listings_from_project(
-    data: dict, project_id: str, city: str
-) -> list[dict]:
+def extract_listings_from_project(data: dict, project_id: str, city: str) -> list[dict]:
     """Extract listing URLs from project JSON data."""
     listings: list[dict] = []
 
@@ -185,9 +175,7 @@ def extract_listing_urls_city(city: str, city_dir: Path) -> dict:
         try:
             data = extract_preloaded_state(html)
             if not data:
-                logger.debug(
-                    "[%s] No SERVER_PRELOADED_STATE_ in %s", city, project_id
-                )
+                logger.debug("[%s] No SERVER_PRELOADED_STATE_ in %s", city, project_id)
                 errors += 1
                 continue
 

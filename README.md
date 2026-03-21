@@ -44,6 +44,16 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 | + structural | 30,981 | +7.5% | *** |
 | + city FE | 30,981 | +3.8% | *** |
 
+**Magicbricks Apartments Only** (with developer FE):
+| Specification | N | Premium | Sig. |
+|--------------|---|---------|------|
+| + structural | 26,149 | +6.4% | *** |
+| + city FE | 26,149 | +2.9% | *** |
+| + developer FE | 26,149 | +3.8% | *** |
+| + city + developer FE | 26,149 | +3.0% | *** |
+
+Developer FE is only meaningful for apartments/flats (90% of MagicBricks data) since houses/villas typically don't have developers listed. Within-developer comparisons still show a significant +3% Vaastu premium.
+
 **Housing.com (multi-city):**
 | Specification | N | Premium | Sig. |
 |--------------|---|---------|------|
@@ -51,16 +61,17 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 | + bhk | 1,599 | +12.3% | ** |
 | + city FE | 1,596 | +5.6% | n.s. |
 
-**Key finding**: Raw correlations show 27-45% premiums, but these attenuate substantially with controls and location FE. With city/sector FE, source-specific premiums range from 2-6%. Magicbricks shows a significant +3.8% premium with city FE. Pooled analysis with city + source FE yields +11.5% (***p<0.01, N=59,895).
+**Key finding**: Raw correlations show 27-45% premiums, but these attenuate substantially with controls and location FE. With city/sector FE, source-specific premiums range from 2-6%. Magicbricks shows a significant +3.8% premium with city FE, and even with the most stringent within-developer comparisons (apartments only), the premium remains +3.0% (***). Pooled analysis with city + source FE yields +11.5% (***p<0.01, N=59,895).
 
 ## Data Sources
 
 ### Magicbricks Multi-City Data (`data/raw/magicbricks/<city>/`)
 
 - **Source**: magicbricks.com listings (apartments, houses, villas)
-- **Collected via**: `scripts/magicbricks/` pipeline (Playwright-based scraper)
+- **Collected via**: `scripts/magicbricks/` 6-step pipeline (Playwright-based scraper)
 - **Cities**: Delhi-NCR, Pune, Navi Mumbai, Bangalore, Jaipur, Lucknow, Patna, Chandigarh, Rajkot
-- **Sample**: 49,845 listings (33,421 after quality filtering for analysis)
+- **Sample**: 49,845 listings (30,981 after quality filtering for analysis)
+- **Composition**: 90% apartments, 10% houses/villas
 - **Preserves**: Raw HTML for reproducibility
 
 ### 99acres CampusX Data (`data/raw/99acres_campusx/`)
@@ -71,7 +82,7 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 - **Files**: `flats_cleaned.csv`, `house_cleaned.csv`, `gurgaon_properties_cleaned_v2.csv`
 - **Sample**: ~6,943 listings (Gurugram only)
 
-### 99acres Kaggle/arvanshul Data (`data/raw/kaggle_arvanshul/`)
+### 99acres Kaggle Data (`data/raw/99acres_kaggle/`)
 
 - **Source**: 99acres.com listings
 - **Obtained via**: Kaggle dataset [arvanshul/real-estate-dataset-99acres](https://www.kaggle.com/datasets/arvanshul/real-estate-dataset-99acres)
@@ -82,14 +93,14 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 ### 99acres Multi-City Data (`data/raw/99acres/<city>/`)
 
 - **Source**: 99acres.com listings (houses + flats)
-- **Collected via**: `scripts/01_collect_99acres.py` (Playwright-based scraper)
+- **Collected via**: `scripts/99acres/` 4-step pipeline (Playwright-based scraper)
 - **Cities**: Bangalore, Chennai, Hyderabad, Pune, Mumbai, Delhi, Noida, Gurgaon, etc.
 - **Preserves**: Raw HTML + text for reproducibility
 
 ### Housing.com Multi-City Data (`data/raw/housingcom/<city>/`)
 
 - **Source**: Housing.com independent-house listings
-- **Collected via**: `scripts/01_collect_housingcom.py` (Playwright-based scraper)
+- **Collected via**: `scripts/housingcom/` 4-step pipeline (Playwright-based scraper)
 - **Cities**: Bangalore, Chennai, Hyderabad, Pune, Mumbai, Noida, Gurgaon, etc.
 - **Preserves**: Raw HTML + text for reproducibility
 
@@ -99,44 +110,89 @@ Do buyers pay a premium for Vaastu-compliant homes? How much?
 - Controls: area, bedrooms, bathrooms, balconies, floor, age, facing, furnishing
 - Robustness: Nearest-neighbor matching within sector/property-type
 
+## Data Cleaning
+
+### Price Filters
+
+Raw listing data contains significant noise requiring filtering:
+
+1. **Price range filter**: 0.1 - 100 crore
+   - Removes ~14,000 rows with price < 0.1 crore (likely rentals mislabeled as sales or data entry errors)
+   - Removes ultra-luxury outliers > 100 crore
+
+2. **Price per sqft filter**: 1,000 - 100,000 INR/sqft
+   - Removes ~500 rows with implausible price/area ratios
+   - Catches data entry errors where price or area is wrong
+
+3. **BHK filter**: 1 - 10 bedrooms
+
+### Outlier Examples
+
+Some egregious outliers removed by these filters:
+
+| Price (Cr) | BHK | Area (sqft) | Price/sqft | Issue |
+|-----------|-----|-------------|------------|-------|
+| 357.0 | 2 | 850 | 42 lakh/sqft | Price entry error (should be ~0.357 Cr?) |
+| 0.00105 | 2 | 700 | 15/sqft | Rental mislabeled as sale |
+| 216.0 | 4 | 2,455 | 8.8 lakh/sqft | Extreme outlier |
+
+These filters reduce MagicBricks from 49,845 to ~31,000 analysis-ready rows.
+
 ## Repository Layout
 
 ```
 scripts/
-├── 01_collect_*.py              # Data collection (99acres, Housing.com, Magicbricks)
-├── 02_parse_*.py                # Parse HTML to parquet
 ├── 02_analyze.py                # Main analysis script (99acres/CampusX)
 ├── 02_download_kaggle.py        # Download Kaggle dataset
 ├── 03_unify_99acres.py          # Unify 99acres data sources
-├── 04_analyze_*.py              # Source-specific hedonic regressions
-├── 04_rationalize_covariates.py # Covariate harmonization
+├── 04_analyze_magicbricks.py    # MagicBricks hedonic regressions
+├── 04_analyze_housingcom.py     # Housing.com hedonic regressions
 ├── 05_analyze_by_source.py      # Cross-source comparison
 ├── 05_validate_kaggle.py        # Kaggle data quality checks
-├── utils/                       # Shared utilities module
-│   ├── __init__.py
-│   ├── parsing.py               # File I/O, regex patterns, data extraction
-│   ├── scraping.py              # Browser automation, proxy, retry logic
-│   ├── feature_extraction.py    # Vaastu detection, sector/city parsing
-│   └── analysis.py              # Hedonic regression utilities
-└── magicbricks/                 # MagicBricks 4-step pipeline
-    ├── 01_collect_search.py     # Collect search result pages
-    ├── 02_extract_urls.py       # Extract property URLs from search
-    ├── 03_collect_detail.py     # Collect individual property pages
-    └── 04_parse.py              # Parse HTML to parquet
+├── export_dataverse.py          # Export data for Dataverse
+│
+├── 99acres/                     # 99acres 4-step pipeline
+│   ├── 01_collect_search.py
+│   ├── 02_extract_urls.py
+│   ├── 03_collect_detail.py
+│   └── 04_parse.py
+│
+├── housingcom/                  # Housing.com 4-step pipeline
+│   ├── 01_collect_search.py
+│   ├── 02_extract_urls.py
+│   ├── 03_collect_detail.py
+│   └── 04_parse.py
+│
+├── magicbricks/                 # MagicBricks 6-step pipeline
+│   ├── 01_collect_search.py
+│   ├── 02_extract_urls.py
+│   ├── 03_collect_projects.py
+│   ├── 04_extract_listing_urls.py
+│   ├── 05_collect_listings.py
+│   ├── 06_parse.py
+│   └── run_pipeline.py
+│
+└── utils/                       # Shared utilities
+    ├── parsing.py
+    ├── scraping.py
+    ├── feature_extraction.py
+    └── analysis.py
 
 data/
 ├── raw/
-│   ├── magicbricks/<city>/      # Magicbricks scraped data
-│   ├── 99acres/<city>/          # 99acres scraped data (multi-city)
-│   ├── 99acres_campusx/         # 99acres data from CampusX repo (Gurugram)
-│   ├── housingcom/<city>/       # Housing.com scraped data
-│   └── kaggle_arvanshul/        # Kaggle dataset (arvanshul)
+│   ├── magicbricks/<city>/      # MagicBricks scraped data
+│   ├── 99acres/<city>/          # 99acres scraped data
+│   ├── 99acres_campusx/         # CampusX Gurgaon data
+│   ├── 99acres_kaggle/          # Kaggle dataset
+│   └── housingcom/<city>/       # Housing.com scraped data
+├── v1/                          # Consolidated export (parquet)
 ├── config/                      # City URL configurations
-└── derived/                     # Analysis samples, unified datasets
+└── derived/                     # Analysis outputs
 
 ms/                              # LaTeX manuscript
 tabs/                            # Generated tables
 figs/                            # Generated figures
+tests/                           # Unit tests
 ```
 
 ## Quick Start
@@ -155,24 +211,25 @@ uv run playwright install chromium
 
 ### Data Collection
 
-**Magicbricks** (4-step pipeline):
+**MagicBricks** (6-step pipeline, or use run_pipeline.py):
 ```bash
-uv run python scripts/magicbricks/01_collect_search.py --city delhi
-uv run python scripts/magicbricks/02_extract_urls.py --city delhi
-uv run python scripts/magicbricks/03_collect_detail.py --city delhi
-uv run python scripts/magicbricks/04_parse.py --city delhi
+uv run python scripts/magicbricks/run_pipeline.py --city delhi
 ```
 
 **99acres**:
 ```bash
-uv run python scripts/01_collect_99acres.py --city bangalore --max-pages 10
-uv run python scripts/02_parse_99acres.py --city bangalore
+uv run python scripts/99acres/01_collect_search.py --city bangalore
+uv run python scripts/99acres/02_extract_urls.py --city bangalore
+uv run python scripts/99acres/03_collect_detail.py --city bangalore
+uv run python scripts/99acres/04_parse.py --city bangalore
 ```
 
 **Housing.com**:
 ```bash
-uv run python scripts/01_collect_housingcom.py --city mumbai --max-pages 10
-uv run python scripts/02_parse_housingcom.py --city mumbai
+uv run python scripts/housingcom/01_collect_search.py --city mumbai
+uv run python scripts/housingcom/02_extract_urls.py --city mumbai
+uv run python scripts/housingcom/03_collect_detail.py --city mumbai
+uv run python scripts/housingcom/04_parse.py --city mumbai
 ```
 
 ### Analysis
@@ -188,4 +245,4 @@ uv run python scripts/05_analyze_by_source.py
 - List prices, not transaction prices
 - Vaastu = text mention, not structural certification
 - Within-sector support for houses is thin
-- Kaggle/arvanshul data excluded from vaastu analysis: features stored as numeric codes without decoder; vaastu detectable only in free-text descriptions (~5% vs ~50% true rate)
+- Kaggle data excluded from Vaastu analysis: features stored as numeric codes without decoder; Vaastu detectable only in free-text descriptions (~5% vs ~50% true rate)

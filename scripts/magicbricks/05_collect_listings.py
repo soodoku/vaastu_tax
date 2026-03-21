@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Collect MagicBricks project detail pages.
+"""Collect MagicBricks individual listing pages.
 
-Fetch project pages (pdpid- URLs) from project_urls.jsonl and save HTML as .html.gz files.
-Outputs project_manifest.jsonl tracking what was collected.
+Fetch individual listing pages (/propertyDetails/) from listing_urls.jsonl
+and save HTML as .html.gz files.
+Outputs listing_manifest.jsonl tracking what was collected.
 
 Example
 -------
-python scripts/magicbricks/03_collect_projects.py --city delhi-ncr_apartment --max-pages 500
-python scripts/magicbricks/03_collect_projects.py --city delhi-ncr_apartment --resume
-python scripts/magicbricks/03_collect_projects.py --city delhi-ncr_apartment --retry-errors
-python scripts/magicbricks/03_collect_projects.py --all-cities --max-pages 100
+python scripts/magicbricks/05_collect_listings.py --city delhi-ncr_apartment --max-pages 500
+python scripts/magicbricks/05_collect_listings.py --city delhi-ncr_apartment --resume
+python scripts/magicbricks/05_collect_listings.py --city delhi-ncr_apartment --retry-errors
+python scripts/magicbricks/05_collect_listings.py --all-cities --max-pages 100
 """
 
 import argparse
@@ -41,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     city_group.add_argument(
         "--all-cities",
         action="store_true",
-        help="Collect project pages for all city directories",
+        help="Collect listing pages for all city directories",
     )
     parser.add_argument(
         "--data-dir",
@@ -51,8 +52,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-pages",
         type=int,
-        default=250,
-        help="Maximum number of project pages to fetch",
+        default=500,
+        help="Maximum number of listing pages to fetch",
     )
     parser.add_argument(
         "--min-sleep", type=float, default=2.0, help="Minimum sleep between requests"
@@ -71,7 +72,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="Skip URLs already in project_manifest.jsonl",
+        help="Skip URLs already in listing_manifest.jsonl",
     )
     parser.add_argument(
         "--retry-errors",
@@ -111,22 +112,22 @@ def get_collected_urls(manifest_path: Path) -> dict[str, dict]:
     return result
 
 
-def collect_projects_city(
+def collect_listings_city(
     city: str,
     city_dir: Path,
     args: argparse.Namespace,
     guard: RobotsGuard,
 ) -> dict:
-    project_urls_path = city_dir / "project_urls.jsonl"
-    project_manifest_path = city_dir / "project_manifest.jsonl"
-    pages_project = ensure_dir(city_dir / "pages" / "project")
+    listing_urls_path = city_dir / "listing_urls.jsonl"
+    listing_manifest_path = city_dir / "listing_manifest.jsonl"
+    pages_listing = ensure_dir(city_dir / "pages" / "listing")
 
-    urls_to_fetch = load_manifest(project_urls_path)
+    urls_to_fetch = load_manifest(listing_urls_path)
     if not urls_to_fetch:
-        logger.warning("[%s] No URLs found in project_urls.jsonl", city)
+        logger.warning("[%s] No URLs found in listing_urls.jsonl", city)
         return {"city": city, "pages_collected": 0}
 
-    collected = get_collected_urls(project_manifest_path)
+    collected = get_collected_urls(listing_manifest_path)
 
     to_collect: list[dict] = []
     for url_entry in urls_to_fetch:
@@ -146,14 +147,14 @@ def collect_projects_city(
         to_collect = to_collect[: args.max_pages]
 
     if not to_collect:
-        logger.info("[%s] No project pages to collect", city)
+        logger.info("[%s] No listing pages to collect", city)
         return {
             "city": city,
             "pages_collected": 0,
-            "manifest_path": str(project_manifest_path),
+            "manifest_path": str(listing_manifest_path),
         }
 
-    logger.info("[%s] Collecting %d project pages", city, len(to_collect))
+    logger.info("[%s] Collecting %d listing pages", city, len(to_collect))
 
     proxy = get_proxy(args.proxy)
     pages_collected = 0
@@ -166,16 +167,18 @@ def collect_projects_city(
         for idx, url_entry in enumerate(to_collect, start=1):
             prop_id = url_entry.get("property_id", "")
             url = url_entry.get("url", "")
+            transaction_type = url_entry.get("transaction_type", "")
 
             if not guard.is_allowed(url):
                 logger.warning("[%s] Skipping %s (robots.txt)", city, prop_id)
                 append_jsonl(
-                    project_manifest_path,
+                    listing_manifest_path,
                     [
                         {
                             "city": city,
                             "property_id": prop_id,
                             "url": url,
+                            "transaction_type": transaction_type,
                             "html_path": None,
                             "status": "blocked",
                             "error_msg": "robots.txt disallows",
@@ -187,21 +190,22 @@ def collect_projects_city(
                 continue
 
             logger.info(
-                "[%s] Fetching project %d/%d: %s", city, idx, len(to_collect), prop_id
+                "[%s] Fetching listing %d/%d: %s", city, idx, len(to_collect), prop_id
             )
             html, _, success = fetch_with_retry(page, url, wait_ms=2000)
 
             if not success:
-                logger.error("[%s] Failed to load project page %s", city, prop_id)
+                logger.error("[%s] Failed to load listing page %s", city, prop_id)
                 existing = collected.get(prop_id, {})
                 retry_count = existing.get("retry_count", 0) + 1
                 append_jsonl(
-                    project_manifest_path,
+                    listing_manifest_path,
                     [
                         {
                             "city": city,
                             "property_id": prop_id,
                             "url": url,
+                            "transaction_type": transaction_type,
                             "html_path": None,
                             "status": "error",
                             "error_msg": "Failed after retries",
@@ -212,17 +216,18 @@ def collect_projects_city(
                 )
                 continue
 
-            html_path = pages_project / f"{slugify(city)}_{prop_id}.html.gz"
+            html_path = pages_listing / f"{slugify(city)}_{prop_id}.html.gz"
             write_html_gz(html_path, html)
             pages_collected += 1
 
             append_jsonl(
-                project_manifest_path,
+                listing_manifest_path,
                 [
                     {
                         "city": city,
                         "property_id": prop_id,
                         "url": url,
+                        "transaction_type": transaction_type,
                         "html_path": str(html_path.relative_to(city_dir)),
                         "status": "success",
                         "error_msg": None,
@@ -233,7 +238,7 @@ def collect_projects_city(
             )
 
             if idx % 25 == 0:
-                logger.info("[%s] Collected %d project pages...", city, idx)
+                logger.info("[%s] Collected %d listing pages...", city, idx)
 
             jitter_sleep(args.min_sleep, args.max_sleep)
 
@@ -242,7 +247,7 @@ def collect_projects_city(
     return {
         "city": city,
         "pages_collected": pages_collected,
-        "manifest_path": str(project_manifest_path),
+        "manifest_path": str(listing_manifest_path),
     }
 
 
@@ -269,29 +274,29 @@ def main() -> None:
         city_dirs = [
             d
             for d in data_dir.iterdir()
-            if d.is_dir() and (d / "project_urls.jsonl").exists()
+            if d.is_dir() and (d / "listing_urls.jsonl").exists()
         ]
-        logger.info("Collecting project pages for %d cities", len(city_dirs))
+        logger.info("Collecting listing pages for %d cities", len(city_dirs))
 
         all_summaries = []
         for city_dir in sorted(city_dirs):
             city = city_dir.name
             logger.info("=== Collecting %s ===", city)
-            summary = collect_projects_city(city, city_dir, args, guard)
+            summary = collect_listings_city(city, city_dir, args, guard)
             all_summaries.append(summary)
             print(json.dumps(summary, indent=2))
 
         total_pages = sum(s["pages_collected"] for s in all_summaries)
         logger.info("=== Collection complete ===")
         logger.info(
-            "Cities: %d, Total project pages: %d", len(all_summaries), total_pages
+            "Cities: %d, Total listing pages: %d", len(all_summaries), total_pages
         )
     else:
         city_dir = data_dir / slugify(args.city)
         if not city_dir.exists():
             raise SystemExit(f"City directory not found: {city_dir}")
 
-        summary = collect_projects_city(args.city, city_dir, args, guard)
+        summary = collect_listings_city(args.city, city_dir, args, guard)
         print(json.dumps(summary, indent=2))
 
 

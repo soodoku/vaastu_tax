@@ -75,8 +75,12 @@ RE_FACING = re.compile(
     r"\b(North(?:[- ]?East|[- ]?West)?|South(?:[- ]?East|[- ]?West)?|East|West)\s*(?:Facing)?\b",
     re.I,
 )
-RE_FURNISHING = re.compile(r"\b(Unfurnished|Semi[- ]?Furnished|Fully[- ]?Furnished|Furnished)\b", re.I)
-RE_PROPERTY_AGE = re.compile(r"(?:property age|age of property|age)[:\s]*(\d+(?:\s*-\s*\d+)?\s*(?:year|yr)s?)", re.I)
+RE_FURNISHING = re.compile(
+    r"\b(Unfurnished|Semi[- ]?Furnished|Fully[- ]?Furnished|Furnished)\b", re.I
+)
+RE_PROPERTY_AGE = re.compile(
+    r"(?:property age|age of property|age)[:\s]*(\d+(?:\s*-\s*\d+)?\s*(?:year|yr)s?)", re.I
+)
 RE_SELLER_TYPE = re.compile(r"\b(Owner|Dealer|Builder|Agent)\b", re.I)
 RE_AMENITIES_SECTION = re.compile(r"(?:Amenities|Features)\s*:?\s*", re.I)
 RE_SHOWING = re.compile(r"Showing\s+\d+\s*-\s*\d+\s+of\s+([\d,]+)", re.I)

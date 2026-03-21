@@ -21,16 +21,16 @@ from urllib.parse import urljoin, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup  # noqa: E402
 
-from scripts.utils import (
+from scripts.utils import (  # noqa: E402
     load_manifest,
     now_iso,
     project_root,
     read_html_gz,
     slugify,
 )
-from scripts.utils.scraping import (
+from scripts.utils.scraping import (  # noqa: E402
     city_outdir,
     logger,
     setup_logging,

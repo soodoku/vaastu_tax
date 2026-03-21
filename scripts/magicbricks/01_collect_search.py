@@ -23,9 +23,9 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright  # noqa: E402
 
-from scripts.utils import (
+from scripts.utils import (  # noqa: E402
     append_jsonl,
     ensure_dir,
     load_manifest,
@@ -34,7 +34,7 @@ from scripts.utils import (
     slugify,
     write_html_gz,
 )
-from scripts.utils.scraping import (
+from scripts.utils.scraping import (  # noqa: E402
     DOMAIN,
     RobotsGuard,
     city_outdir,

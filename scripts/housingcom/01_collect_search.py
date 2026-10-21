@@ -151,7 +151,15 @@ def extract_detail_links(hrefs: list[str], root_url: str) -> list[str]:
         path = parsed.path.lower()
         if "/in/buy/" not in path:
             continue
-        if any(bad in path for bad in ["/price-trends", "/locality-insights", "/builder/", "/projects/"]):
+        if any(
+            bad in path
+            for bad in [
+                "/price-trends",
+                "/locality-insights",
+                "/builder/",
+                "/projects/",
+            ]
+        ):
             continue
         if not ("/page/" in path or "-for-rs-" in path):
             continue
@@ -241,7 +249,9 @@ def collect_search_city(
             html, text, success = fetch_with_retry(page, url, wait_ms=2000)
 
             if not success:
-                logger.error("[%s] Failed to load search page %d after retries", city, pageno)
+                logger.error(
+                    "[%s] Failed to load search page %d after retries", city, pageno
+                )
                 append_jsonl(
                     manifest_path,
                     [
@@ -320,7 +330,9 @@ def main() -> None:
                 unique_urls[city_key] = url
         cities_to_collect = list(unique_urls.keys())
 
-        logger.info("Collecting %d cities: %s", len(cities_to_collect), cities_to_collect[:5])
+        logger.info(
+            "Collecting %d cities: %s", len(cities_to_collect), cities_to_collect[:5]
+        )
 
         all_summaries = []
         for city_key in cities_to_collect:
@@ -334,7 +346,9 @@ def main() -> None:
 
         total_pages = sum(s["pages_collected"] for s in all_summaries)
         logger.info("=== Collection complete ===")
-        logger.info("Cities: %d, Total search pages: %d", len(all_summaries), total_pages)
+        logger.info(
+            "Cities: %d, Total search pages: %d", len(all_summaries), total_pages
+        )
     else:
         if args.city not in config:
             raise SystemExit(

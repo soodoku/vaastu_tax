@@ -51,7 +51,9 @@ from scripts.utils import (
 )
 from scripts.utils.scraping import logger, setup_logging
 
-RE_PRICE_UNIT = re.compile(r"₹?\s*([0-9][\d,]*(?:\.\d+)?)\s*(Cr|Crore|L|Lac|Lakh|Lakhs|K)?\b", re.I)
+RE_PRICE_UNIT = re.compile(
+    r"₹?\s*([0-9][\d,]*(?:\.\d+)?)\s*(Cr|Crore|L|Lac|Lakh|Lakhs|K)?\b", re.I
+)
 
 
 @dataclass
@@ -147,7 +149,11 @@ def parse_detail_from_next_data(
     try:
         props = next_data.get("props", {})
         page_props = props.get("pageProps", {})
-        listing_data = page_props.get("listingData", {}) or page_props.get("propertyData", {}) or {}
+        listing_data = (
+            page_props.get("listingData", {})
+            or page_props.get("propertyData", {})
+            or {}
+        )
         if not listing_data:
             return None
 
@@ -160,7 +166,9 @@ def parse_detail_from_next_data(
         elif isinstance(price_display, str):
             price_crore_val = price_to_crore(price_display)
 
-        builtup = listing_data.get("builtUpArea") or listing_data.get("superBuiltupArea")
+        builtup = listing_data.get("builtUpArea") or listing_data.get(
+            "superBuiltupArea"
+        )
         carpet = listing_data.get("carpetArea")
         bhk = listing_data.get("bhk") or listing_data.get("bedroom")
         bathrooms = listing_data.get("bathroom")
@@ -169,7 +177,9 @@ def parse_detail_from_next_data(
         facing = listing_data.get("facing")
         floor_num = listing_data.get("floor") or listing_data.get("floorNumber")
         total_floors = listing_data.get("totalFloor")
-        possession = listing_data.get("possession") or listing_data.get("possessionStatus")
+        possession = listing_data.get("possession") or listing_data.get(
+            "possessionStatus"
+        )
         age = listing_data.get("propertyAge") or listing_data.get("age")
         amenities = listing_data.get("amenities")
         if isinstance(amenities, list):
@@ -234,8 +244,10 @@ def parse_detail_from_text(
     for line in lines:
         line_lower = line.lower()
         if RE_BHK.search(line) and (
-            "house" in line_lower or "flat" in line_lower
-            or "villa" in line_lower or "apartment" in line_lower
+            "house" in line_lower
+            or "flat" in line_lower
+            or "villa" in line_lower
+            or "apartment" in line_lower
         ):
             title = line
             break
@@ -253,7 +265,9 @@ def parse_detail_from_text(
     price_display = None
     price_crore_val = None
     for line in lines:
-        if "₹" in line and ("cr" in line.lower() or "lac" in line.lower() or "lakh" in line.lower()):
+        if "₹" in line and (
+            "cr" in line.lower() or "lac" in line.lower() or "lakh" in line.lower()
+        ):
             price_display = line
             price_crore_val = price_to_crore(line)
             break
@@ -321,9 +335,10 @@ def parse_detail_from_text(
         if "about" in line.lower() and "property" in line.lower():
             desc_lines = []
             for j in range(i + 1, min(i + 20, len(lines))):
-                if any(stop in lines[j].lower() for stop in [
-                    "amenities", "features", "specifications", "overview"
-                ]):
+                if any(
+                    stop in lines[j].lower()
+                    for stop in ["amenities", "features", "specifications", "overview"]
+                ):
                     break
                 desc_lines.append(lines[j])
             if desc_lines:
@@ -335,9 +350,10 @@ def parse_detail_from_text(
         if RE_AMENITIES_SECTION.search(line):
             amen_lines = []
             for j in range(i + 1, min(i + 30, len(lines))):
-                if any(stop in lines[j].lower() for stop in [
-                    "about", "description", "overview", "contact"
-                ]):
+                if any(
+                    stop in lines[j].lower()
+                    for stop in ["about", "description", "overview", "contact"]
+                ):
                     break
                 amen_lines.append(lines[j])
             if amen_lines:

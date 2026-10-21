@@ -56,7 +56,9 @@ def compute_coverage(df: pd.DataFrame, source_name: str) -> dict:
         if field in df.columns:
             non_null = df[field].notna().sum()
             if df[field].dtype == "object":
-                non_null = (df[field].notna() & (df[field].astype(str).str.strip() != "")).sum()
+                non_null = (
+                    df[field].notna() & (df[field].astype(str).str.strip() != "")
+                ).sum()
             pct = round(non_null / n * 100, 1)
             coverage["fields"][field] = {"non_null": int(non_null), "coverage_pct": pct}
         else:
@@ -106,7 +108,9 @@ def check_warnings(coverage_by_source: dict) -> list[str]:
     for source, cov in coverage_by_source.items():
         n = cov["n"]
         if n < 100:
-            warnings.append(f"WARNING: {source} has only {n} observations (too small for analysis)")
+            warnings.append(
+                f"WARNING: {source} has only {n} observations (too small for analysis)"
+            )
 
         for field in critical_fields:
             field_cov = cov["fields"].get(field, {}).get("coverage_pct", 0)

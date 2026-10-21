@@ -22,10 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from bs4 import BeautifulSoup  # noqa: E402
 
-from scripts.utils import (load_manifest, now_iso, project_root,  # noqa: E402
-                           read_html_gz, slugify)
-from scripts.utils.scraping import (city_outdir, logger,  # noqa: E402
-                                    setup_logging)
+from scripts.utils import load_manifest, now_iso, project_root, read_html_gz, slugify  # noqa: E402
+from scripts.utils.scraping import city_outdir, logger, setup_logging  # noqa: E402
 
 RE_PDPID = re.compile(r"pdpid-([a-zA-Z0-9]+)", re.I)
 RE_PROPERTY_DETAILS = re.compile(r"/propertyDetails/([^/?]+)", re.I)

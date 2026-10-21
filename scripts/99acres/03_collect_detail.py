@@ -228,7 +228,9 @@ def collect_detail_city(
                 )
                 continue
 
-            html_path = pages_detail / f"{slugify(city)}_{property_type}_{prop_id}.html.gz"
+            html_path = (
+                pages_detail / f"{slugify(city)}_{property_type}_{prop_id}.html.gz"
+            )
             write_html_gz(html_path, html)
             pages_collected += 1
 

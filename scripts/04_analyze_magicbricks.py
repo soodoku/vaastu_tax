@@ -105,15 +105,17 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
     df["base_city"] = df["city"].apply(lambda x: x.split("-")[0] if "-" in x else x)
 
     df["property_type"] = df["city"].apply(extract_property_type)
-    df["prop_class"] = df["property_type"].map({
-        "apartment": "flat_type",
-        "builder-floor": "flat_type",
-        "studio": "flat_type",
-        "penthouse": "flat_type",
-        "house": "house_type",
-        "villa": "house_type",
-        "unknown": "unknown",
-    })
+    df["prop_class"] = df["property_type"].map(
+        {
+            "apartment": "flat_type",
+            "builder-floor": "flat_type",
+            "studio": "flat_type",
+            "penthouse": "flat_type",
+            "house": "house_type",
+            "villa": "house_type",
+            "unknown": "unknown",
+        }
+    )
 
     return df
 
@@ -392,9 +394,13 @@ def run_regressions(df: pd.DataFrame) -> dict:
             proj_vaastu_var = df_proj.groupby("project_name")["vaastu"].nunique()
             projs_with_variation = (proj_vaastu_var > 1).sum()
             print("\n" + "-" * 70)
-            print(f"Model 9: Project FE ({len(valid_projs)} projects, {projs_with_variation} with vaastu variation)")
+            print(
+                f"Model 9: Project FE ({len(valid_projs)} projects, {projs_with_variation} with vaastu variation)"
+            )
             print("-" * 70)
-            formula = "ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(project_name)"
+            formula = (
+                "ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(project_name)"
+            )
             try:
                 m9 = smf.ols(formula, data=df_proj).fit(cov_type="HC3")
                 coef = m9.params["vaastu"]
@@ -521,9 +527,7 @@ def run_property_type_regressions(df: pd.DataFrame) -> pd.DataFrame:
     print("PROPERTY TYPE ANALYSIS")
     print("=" * 70)
     print("Testing CampusX finding: Flat ~0%, House +11.9%")
-    print(
-        "\nModel: ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(base_city)\n"
-    )
+    print("\nModel: ln_price ~ vaastu + bhk_cat + ln_area + bathrooms + C(base_city)\n")
 
     df_bath = df.dropna(subset=["bathrooms"])
     results = []
@@ -569,16 +573,18 @@ def run_property_type_regressions(df: pd.DataFrame) -> pd.DataFrame:
                 f"Premium: {pct:+6.1f}% (SE: {se:.3f}) {sig}"
             )
 
-            results.append({
-                "prop_class": prop_class,
-                "n": n,
-                "vaastu_n": vaastu_n,
-                "vaastu_pct": vaastu_pct,
-                "coef": coef,
-                "se": se,
-                "pval": pval,
-                "pct": pct,
-            })
+            results.append(
+                {
+                    "prop_class": prop_class,
+                    "n": n,
+                    "vaastu_n": vaastu_n,
+                    "vaastu_pct": vaastu_pct,
+                    "coef": coef,
+                    "se": se,
+                    "pval": pval,
+                    "pct": pct,
+                }
+            )
         except Exception as e:
             print(f"{prop_class:12s}: n={n:5d}, vaastu={vaastu_n:4d} - ERROR: {e}")
 
@@ -587,7 +593,7 @@ def run_property_type_regressions(df: pd.DataFrame) -> pd.DataFrame:
         flat_row = next((r for r in results if r["prop_class"] == "flat_type"), None)
         house_row = next((r for r in results if r["prop_class"] == "house_type"), None)
         if flat_row and house_row:
-            print(f"  CampusX:     flat ~0% (n.s.),    house +11.9% (**)")
+            print("  CampusX:     flat ~0% (n.s.),    house +11.9% (**)")
             flat_sig = get_significance_stars(flat_row["pval"])
             house_sig = get_significance_stars(house_row["pval"])
             print(
@@ -650,9 +656,9 @@ def main():
     print(
         f"""
 Magicbricks Overall Effect (with controls):
-  Premium: {best_model['pct']:+.1f}% {sig}
-  p-value: {best_model['pval']:.4f}
-  N: {best_model.get('n', len(df)):.0f}
+  Premium: {best_model["pct"]:+.1f}% {sig}
+  p-value: {best_model["pval"]:.4f}
+  N: {best_model.get("n", len(df)):.0f}
 """
     )
 

@@ -23,13 +23,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
-from scripts.utils import (append_jsonl, ensure_dir,  # noqa: E402
-                           load_manifest, now_iso, project_root, slugify,
-                           write_html_gz)
-from scripts.utils.scraping import (DOMAIN, RobotsGuard,  # noqa: E402
-                                    create_browser_context, fetch_with_retry,
-                                    get_proxy, jitter_sleep, logger,
-                                    setup_logging)
+from scripts.utils import (  # noqa: E402
+    append_jsonl,
+    ensure_dir,
+    load_manifest,
+    now_iso,
+    project_root,
+    slugify,
+    write_html_gz,
+)
+from scripts.utils.scraping import (  # noqa: E402
+    DOMAIN,
+    RobotsGuard,
+    create_browser_context,
+    fetch_with_retry,
+    get_proxy,
+    jitter_sleep,
+    logger,
+    setup_logging,
+)
 
 
 def parse_args() -> argparse.Namespace:

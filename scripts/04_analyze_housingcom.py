@@ -93,7 +93,7 @@ def run_regressions(df: pd.DataFrame) -> dict:
     summary["vaastu_pct"] = summary["vaastu_pct"].round(1)
     print(summary.to_string())
     print(
-        f"\nTotal: {len(df):,} listings, {df['vaastu'].sum():,} vaastu ({100*df['vaastu'].mean():.1f}%)"
+        f"\nTotal: {len(df):,} listings, {df['vaastu'].sum():,} vaastu ({100 * df['vaastu'].mean():.1f}%)"
     )
 
     # Model 1: Basic (no controls)
@@ -300,7 +300,11 @@ def write_latex_table(city_results: pd.DataFrame, overall_results: dict) -> None
         elif row["pval"] < 0.1:
             sig = "*"
 
-        pct_str = f"+{row['pct']:.1f}\\%" if row["pct"] >= 0 else f"$-${abs(row['pct']):.1f}\\%"
+        pct_str = (
+            f"+{row['pct']:.1f}\\%"
+            if row["pct"] >= 0
+            else f"$-${abs(row['pct']):.1f}\\%"
+        )
         lines.append(
             f"{city.title()} & {int(row['n']):,} & {int(row['vaastu_n'])} & {row['vaastu_pct']:.1f}\\% & {pct_str} & {sig} \\\\"
         )
@@ -319,16 +323,18 @@ def write_latex_table(city_results: pd.DataFrame, overall_results: dict) -> None
     overall_vaastu_pct = 100 * overall_vaastu_n / overall_n
     overall_pct_str = f"+{m6['pct']:.1f}\\%"
 
-    lines.extend([
-        r"\midrule",
-        f"\\textbf{{Overall}} & \\textbf{{{overall_n:,}}} & \\textbf{{{int(overall_vaastu_n)}}} & \\textbf{{{overall_vaastu_pct:.1f}\\%}} & \\textbf{{{overall_pct_str}}} & {overall_sig} \\\\",
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"",
-        r"\vspace{0.5em}",
-        r"\parbox{\textwidth}{\small\textit{Notes}: Housing.com independent-house listings scraped March 2026. Model: $\log(\text{price}) \sim \text{vaastu} + \text{BHK} + \log(\text{area}) + \text{city FE} + \text{facing} + \text{furnishing}$. HC3 standard errors. Gurgaon and Noida omitted due to insufficient Vaastu observations ($<$20). ** $p<0.05$, *** $p<0.01$.}",
-        r"\end{table}",
-    ])
+    lines.extend(
+        [
+            r"\midrule",
+            f"\\textbf{{Overall}} & \\textbf{{{overall_n:,}}} & \\textbf{{{int(overall_vaastu_n)}}} & \\textbf{{{overall_vaastu_pct:.1f}\\%}} & \\textbf{{{overall_pct_str}}} & {overall_sig} \\\\",
+            r"\bottomrule",
+            r"\end{tabular}",
+            r"",
+            r"\vspace{0.5em}",
+            r"\parbox{\textwidth}{\small\textit{Notes}: Housing.com independent-house listings scraped March 2026. Model: $\log(\text{price}) \sim \text{vaastu} + \text{BHK} + \log(\text{area}) + \text{city FE} + \text{facing} + \text{furnishing}$. HC3 standard errors. Gurgaon and Noida omitted due to insufficient Vaastu observations ($<$20). ** $p<0.05$, *** $p<0.01$.}",
+            r"\end{table}",
+        ]
+    )
 
     output_path = TABS_DIR / "tab_housingcom_robustness.tex"
     with open(output_path, "w") as f:
@@ -389,9 +395,9 @@ def main():
     print(
         f"""
 Housing.com Overall Effect (Full Model with all controls):
-  Premium: {m6['pct']:+.1f}%
-  p-value: {m6['pval']:.4f}
-  N: {m6['n']:.0f}
+  Premium: {m6["pct"]:+.1f}%
+  p-value: {m6["pval"]:.4f}
+  N: {m6["n"]:.0f}
 
 Interpretation:
   - Compare to CampusX (+6.7%***) and Kaggle (-3.2% n.s.)

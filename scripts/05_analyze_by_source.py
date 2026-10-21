@@ -150,7 +150,10 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
 
     df["price_per_sqft"] = (df["price_crore"] * 1e7) / df["builtup_area_sqft"]
     n_before_ppsf = len(df)
-    df = df[(df["price_per_sqft"].isna()) | ((df["price_per_sqft"] >= 1000) & (df["price_per_sqft"] <= 100000))]
+    df = df[
+        (df["price_per_sqft"].isna())
+        | ((df["price_per_sqft"] >= 1000) & (df["price_per_sqft"] <= 100000))
+    ]
     n_ppsf_filtered = n_before_ppsf - len(df)
     if n_ppsf_filtered > 0:
         print(f"  (filtered {n_ppsf_filtered} rows with outlier price/sqft)")
@@ -186,7 +189,12 @@ def prepare_data(df: pd.DataFrame) -> pd.DataFrame:
         df["total_floors"] = pd.to_numeric(df["total_floors"], errors="coerce")
 
     if "possession_status" in df.columns:
-        df["ready_to_move"] = df["possession_status"].str.lower().str.contains("ready|immediate", na=False).astype(int)
+        df["ready_to_move"] = (
+            df["possession_status"]
+            .str.lower()
+            .str.contains("ready|immediate", na=False)
+            .astype(int)
+        )
 
     n_end = len(df)
     if n_start - n_end > 0:
@@ -208,18 +216,28 @@ def create_feature_dummies(df: pd.DataFrame) -> pd.DataFrame:
                 all_codes.add(int(code))
     for code in sorted(all_codes):
         col_name = f"feat_{code}"
-        df[col_name] = df["features"].fillna("").apply(
-            lambda x, c=code: 1 if str(c) in [s.strip() for s in str(x).split(",")] else 0
+        df[col_name] = (
+            df["features"]
+            .fillna("")
+            .apply(
+                lambda x, c=code: (
+                    1 if str(c) in [s.strip() for s in str(x).split(",")] else 0
+                )
+            )
         )
     return df
 
 
-def run_regression(
-    df: pd.DataFrame, formula: str, source_name: str
-) -> dict | None:
+def run_regression(df: pd.DataFrame, formula: str, source_name: str) -> dict | None:
     """Run OLS regression and return results."""
     work_df = df.dropna(subset=["ln_price", "vaastu_mentioned"])
-    formula_vars = formula.replace("ln_price ~ ", "").replace(" + ", " ").replace("C(", " ").replace(")", " ").split()
+    formula_vars = (
+        formula.replace("ln_price ~ ", "")
+        .replace(" + ", " ")
+        .replace("C(", " ")
+        .replace(")", " ")
+        .split()
+    )
     for var in formula_vars:
         if var in work_df.columns:
             work_df = work_df.dropna(subset=[var])
@@ -281,14 +299,28 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     has_balconies = source_df["balconies"].notna().sum() > 50
     has_floor = source_df["floor"].notna().sum() > 50
     has_age = source_df["age"].notna().sum() > 50
-    has_facing = ("facing" in source_df.columns) and (source_df["facing"].notna().sum() > 50)
-    has_furnishing = ("furnishing" in source_df.columns) and (source_df["furnishing"].notna().sum() > 50)
-    has_sector = ("sector" in source_df.columns) and (source_df["sector"].notna().sum() > 50)
+    has_facing = ("facing" in source_df.columns) and (
+        source_df["facing"].notna().sum() > 50
+    )
+    has_furnishing = ("furnishing" in source_df.columns) and (
+        source_df["furnishing"].notna().sum() > 50
+    )
+    has_sector = ("sector" in source_df.columns) and (
+        source_df["sector"].notna().sum() > 50
+    )
     has_city = ("city" in source_df.columns) and (source_df["city"].nunique() > 1)
-    has_locality = ("locality" in source_df.columns) and (source_df["locality"].nunique() > 10)
-    has_seller_type = ("seller_type" in source_df.columns) and (source_df["seller_type"].notna().sum() > 50)
-    has_total_floors = ("total_floors" in source_df.columns) and (source_df["total_floors"].notna().sum() > 50)
-    has_ready_to_move = ("ready_to_move" in source_df.columns) and (source_df["ready_to_move"].notna().sum() > 50)
+    has_locality = ("locality" in source_df.columns) and (
+        source_df["locality"].nunique() > 10
+    )
+    has_seller_type = ("seller_type" in source_df.columns) and (
+        source_df["seller_type"].notna().sum() > 50
+    )
+    has_total_floors = ("total_floors" in source_df.columns) and (
+        source_df["total_floors"].notna().sum() > 50
+    )
+    has_ready_to_move = ("ready_to_move" in source_df.columns) and (
+        source_df["ready_to_move"].notna().sum() > 50
+    )
 
     use_sector_fe = source_name == "campusx" and has_sector
     use_city_fe = source_name in ("magicbricks", "housingcom") and has_city
@@ -303,7 +335,9 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
     if has_bhk:
         specs.append(("+ bhk", "ln_price ~ vaastu_mentioned + bhk"))
         if has_area:
-            specs.append(("+ bhk + area", "ln_price ~ vaastu_mentioned + bhk + ln_area"))
+            specs.append(
+                ("+ bhk + area", "ln_price ~ vaastu_mentioned + bhk + ln_area")
+            )
             if has_bath:
                 base_struct = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms"
                 specs.append(("+ structural", base_struct))
@@ -328,23 +362,51 @@ def run_source_analysis(df: pd.DataFrame, source_name: str) -> list[dict]:
 
                 if len(controls) > 1:
                     full_controls = " + ".join(controls)
-                    specs.append(("+ full controls", f"ln_price ~ vaastu_mentioned + bhk + ln_area + {full_controls}"))
+                    specs.append(
+                        (
+                            "+ full controls",
+                            f"ln_price ~ vaastu_mentioned + bhk + ln_area + {full_controls}",
+                        )
+                    )
 
     if use_sector_fe:
-        base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
+        base = (
+            "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms"
+            if (has_bhk and has_area and has_bath)
+            else "ln_price ~ vaastu_mentioned + bhk"
+            if has_bhk
+            else "ln_price ~ vaastu_mentioned"
+        )
         specs.append(("+ sector FE", f"{base} + C(sector)"))
     elif use_city_fe:
-        base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
+        base = (
+            "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms"
+            if (has_bhk and has_area and has_bath)
+            else "ln_price ~ vaastu_mentioned + bhk"
+            if has_bhk
+            else "ln_price ~ vaastu_mentioned"
+        )
         specs.append(("+ city FE", f"{base} + C(city)"))
 
     if source_name == "magicbricks" and has_locality:
-        base = "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms" if (has_bhk and has_area and has_bath) else "ln_price ~ vaastu_mentioned + bhk" if has_bhk else "ln_price ~ vaastu_mentioned"
+        base = (
+            "ln_price ~ vaastu_mentioned + bhk + ln_area + bathrooms"
+            if (has_bhk and has_area and has_bath)
+            else "ln_price ~ vaastu_mentioned + bhk"
+            if has_bhk
+            else "ln_price ~ vaastu_mentioned"
+        )
         specs.append(("+ locality FE", f"{base} + C(locality)"))
 
     feat_cols = [c for c in source_df.columns if c.startswith("feat_")]
     if feat_cols and has_bhk and has_area:
         feat_formula = " + ".join(feat_cols)
-        specs.append(("+ features", f"ln_price ~ vaastu_mentioned + bhk + ln_area + {feat_formula}"))
+        specs.append(
+            (
+                "+ features",
+                f"ln_price ~ vaastu_mentioned + bhk + ln_area + {feat_formula}",
+            )
+        )
 
     for spec_name, formula in specs:
         result = run_regression(source_df, formula, source_name)
@@ -366,7 +428,10 @@ def run_aggregate_analysis(df: pd.DataFrame) -> list[dict]:
         ("pooled_bhk", "ln_price ~ vaastu_mentioned + bhk"),
         ("pooled_city_fe", "ln_price ~ vaastu_mentioned + bhk + C(city)"),
         ("pooled_source_fe", "ln_price ~ vaastu_mentioned + bhk + C(source)"),
-        ("pooled_city_source_fe", "ln_price ~ vaastu_mentioned + bhk + C(city) + C(source)"),
+        (
+            "pooled_city_source_fe",
+            "ln_price ~ vaastu_mentioned + bhk + C(city) + C(source)",
+        ),
     ]
 
     for spec_name, formula in specs:
@@ -407,16 +472,18 @@ def generate_latex_table(results: list[dict], output_path: Path, title: str) -> 
             f"{r['coef']:.4f}{stars} & ({r['se']:.4f}) & {ci} & {pct} \\\\"
         )
 
-    lines.extend([
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\begin{tablenotes}",
-        r"\small",
-        r"\item Note: * p<0.1, ** p<0.05, *** p<0.01. Dependent variable is ln(price in crore).",
-        r"\item \% Effect shows the percentage change in price for Vaastu-mentioned properties.",
-        r"\end{tablenotes}",
-        r"\end{table}",
-    ])
+    lines.extend(
+        [
+            r"\bottomrule",
+            r"\end{tabular}",
+            r"\begin{tablenotes}",
+            r"\small",
+            r"\item Note: * p<0.1, ** p<0.05, *** p<0.01. Dependent variable is ln(price in crore).",
+            r"\item \% Effect shows the percentage change in price for Vaastu-mentioned properties.",
+            r"\end{tablenotes}",
+            r"\end{table}",
+        ]
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines))
@@ -436,7 +503,9 @@ def generate_forest_plot(results: list[dict], output_path: Path) -> None:
         if spec not in fe_priority:
             continue
         source = r["source"]
-        if source not in source_best or fe_priority[spec] < fe_priority.get(source_best[source].get("spec_name"), 99):
+        if source not in source_best or fe_priority[spec] < fe_priority.get(
+            source_best[source].get("spec_name"), 99
+        ):
             source_best[source] = r
 
     main_results = list(source_best.values())
@@ -460,7 +529,10 @@ def generate_forest_plot(results: list[dict], output_path: Path) -> None:
     ax.errorbar(
         coefs,
         y_positions,
-        xerr=[[c - ci_low for c, ci_low in zip(coefs, ci_lows)], [h - c for c, h in zip(coefs, ci_highs)]],
+        xerr=[
+            [c - ci_low for c, ci_low in zip(coefs, ci_lows)],
+            [h - c for c, h in zip(coefs, ci_highs)],
+        ],
         fmt="o",
         capsize=5,
         capthick=2,
@@ -506,7 +578,9 @@ def main() -> None:
     print(f"  99acres: {len(df)} rows")
 
     if args.export_dir:
-        export_dir = args.export_dir if args.export_dir.is_absolute() else root / args.export_dir
+        export_dir = (
+            args.export_dir if args.export_dir.is_absolute() else root / args.export_dir
+        )
         print(f"Loading from export directory: {export_dir}")
 
         print("Loading magicbricks data from export...")
@@ -568,8 +642,12 @@ def main() -> None:
     agg_only = [r for r in all_results if r["source"] == "aggregate"]
 
     print("\nGenerating outputs...")
-    generate_latex_table(source_results, tex_dir / "tab_by_source_coefs.tex", "Vaastu Premium by Source")
-    generate_latex_table(agg_only, tex_dir / "tab_aggregate_coef.tex", "Aggregate Vaastu Premium")
+    generate_latex_table(
+        source_results, tex_dir / "tab_by_source_coefs.tex", "Vaastu Premium by Source"
+    )
+    generate_latex_table(
+        agg_only, tex_dir / "tab_aggregate_coef.tex", "Aggregate Vaastu Premium"
+    )
     generate_forest_plot(source_results, figs_dir / "coef_by_source.png")
 
     output = {
@@ -589,7 +667,9 @@ def main() -> None:
     print("\n=== Summary ===")
     for r in all_results:
         if r.get("spec_name") and ("FE" in r["spec_name"] or r["spec_name"] == "+ bhk"):
-            print(f"  {r['source']} ({r['spec_name']}): {r['pct_effect']:+.1f}% [{r['pct_ci_low']:.1f}, {r['pct_ci_high']:.1f}]")
+            print(
+                f"  {r['source']} ({r['spec_name']}): {r['pct_effect']:+.1f}% [{r['pct_ci_low']:.1f}, {r['pct_ci_high']:.1f}]"
+            )
 
 
 if __name__ == "__main__":

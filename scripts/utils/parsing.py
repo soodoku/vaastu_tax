@@ -52,16 +52,20 @@ RE_PRICE_UNIT = re.compile(
 )
 RE_BHK = re.compile(r"(\d+(?:\.\d+)?)\s*BHK\b", re.I)
 RE_SQFT = re.compile(r"([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft|square feet)\b", re.I)
-RE_CARPET = re.compile(r"carpet\s*(?:area)?[:\s]*([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft)?", re.I)
+RE_CARPET = re.compile(
+    r"carpet\s*(?:area)?[:\s]*([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft)?", re.I
+)
 RE_BUILTUP = re.compile(
     r"(?:built[- ]?up|super built[- ]?up)\s*(?:area)?[:\s]*"
     r"([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft|sqft)?",
-    re.I
+    re.I,
 )
 RE_PPSF = re.compile(r"₹\s*([\d,]+(?:\.\d+)?)\s*/\s*(?:sq\.?\s*ft|sqft)", re.I)
 RE_BATH = re.compile(r"(\d+(?:\.\d+)?)\s*(?:Bath|Bathroom)s?\b", re.I)
 RE_BALCONY = re.compile(r"(\d+(?:\.\d+)?)\s*Balcon(?:y|ies)\b", re.I)
-RE_FLOOR = re.compile(r"(?:Floor|Storey)\s*:?\s*(\d+)\s*(?:of|out of|/)?\s*(\d+)?", re.I)
+RE_FLOOR = re.compile(
+    r"(?:Floor|Storey)\s*:?\s*(\d+)\s*(?:of|out of|/)?\s*(\d+)?", re.I
+)
 RE_LAST_UPDATED = re.compile(r"(?:Last updated|Updated):?\s*(.+?)(?:\||$)", re.I)
 RE_POSTED_DATE = re.compile(r"Posted\s*(?:on)?:?\s*(.+?)(?:\||$)", re.I)
 RE_POSSESSION = re.compile(
@@ -77,7 +81,8 @@ RE_FURNISHING = re.compile(
     r"\b(Unfurnished|Semi[- ]?Furnished|Fully[- ]?Furnished|Furnished)\b", re.I
 )
 RE_PROPERTY_AGE = re.compile(
-    r"(?:property age|age of property|age)[:\s]*(\d+(?:\s*-\s*\d+)?\s*(?:year|yr)s?)", re.I
+    r"(?:property age|age of property|age)[:\s]*(\d+(?:\s*-\s*\d+)?\s*(?:year|yr)s?)",
+    re.I,
 )
 RE_SELLER_TYPE = re.compile(r"\b(Owner|Dealer|Builder|Agent)\b", re.I)
 RE_AMENITIES_SECTION = re.compile(r"(?:Amenities|Features)\s*:?\s*", re.I)
@@ -110,7 +115,11 @@ def price_to_crore(raw: str | None) -> float | None:
     if not raw:
         return None
     raw = normalize_ws(raw)
-    if "price on request" in raw.lower() or "por" in raw.lower() or "call for price" in raw.lower():
+    if (
+        "price on request" in raw.lower()
+        or "por" in raw.lower()
+        or "call for price" in raw.lower()
+    ):
         return None
     m = RE_PRICE_UNIT.search(raw)
     if not m:
@@ -161,11 +170,17 @@ def normalize_direction(text: str | None) -> str | None:
     return normalize_ws(text)
 
 
-def find_price_display(lines: Sequence[str], title_idx: int | None = None) -> str | None:
+def find_price_display(
+    lines: Sequence[str], title_idx: int | None = None
+) -> str | None:
     """Find price display line in listing text."""
     start = title_idx + 1 if title_idx is not None else 0
     for line in lines[start : start + 10]:
-        if "₹" in line or "price on request" in line.lower() or "call for price" in line.lower():
+        if (
+            "₹" in line
+            or "price on request" in line.lower()
+            or "call for price" in line.lower()
+        ):
             return line
     for line in lines[:30]:
         if "₹" in line:
@@ -173,7 +188,9 @@ def find_price_display(lines: Sequence[str], title_idx: int | None = None) -> st
     return None
 
 
-def find_first_matching_line(lines: Sequence[str], pattern: re.Pattern[str]) -> str | None:
+def find_first_matching_line(
+    lines: Sequence[str], pattern: re.Pattern[str]
+) -> str | None:
     """Find first line matching a regex pattern."""
     for line in lines:
         if pattern.search(line):
@@ -190,12 +207,30 @@ def extract_section(
     """Extract text section following a heading."""
     if stop_heads is None:
         stop_heads = {
-            "property location", "amenities", "about this property", "overview",
-            "project details", "nearby places", "specifications", "furnishing",
-            "configuration", "ratings", "locality", "calculator", "price trends",
-            "home loan", "similar properties", "emi calculator", "faq", "read more",
-            "about the builder", "about builder", "more about", "contact",
-            "safety tips", "report this listing",
+            "property location",
+            "amenities",
+            "about this property",
+            "overview",
+            "project details",
+            "nearby places",
+            "specifications",
+            "furnishing",
+            "configuration",
+            "ratings",
+            "locality",
+            "calculator",
+            "price trends",
+            "home loan",
+            "similar properties",
+            "emi calculator",
+            "faq",
+            "read more",
+            "about the builder",
+            "about builder",
+            "more about",
+            "contact",
+            "safety tips",
+            "report this listing",
         }
 
     heading_l = heading.lower().strip()
@@ -259,6 +294,7 @@ def read_existing_property_ids(parsed_csv: Path) -> set[str]:
         return set()
     try:
         import pandas as pd
+
         df = pd.read_csv(parsed_csv, dtype={"property_id": str})
         return set(df["property_id"].dropna().astype(str))
     except Exception:

@@ -134,7 +134,9 @@ def load_city_config_99acres(path: Path) -> dict[str, dict[str, str]]:
     with open(path, "r", encoding="utf-8") as fh:
         data = json.load(fh)
     if not isinstance(data, dict):
-        raise ValueError(f"Config at {path} must be a JSON object of city -> {{house, flat}} URLs.")
+        raise ValueError(
+            f"Config at {path} must be a JSON object of city -> {{house, flat}} URLs."
+        )
     return data
 
 
@@ -167,7 +169,10 @@ def extract_detail_links(hrefs: list[str], root_url: str) -> list[str]:
         path = parsed.path.lower()
         if "spid-" not in path:
             continue
-        if any(bad in path for bad in ["/projects/", "/builder/", "/price-trends", "/search/"]):
+        if any(
+            bad in path
+            for bad in ["/projects/", "/builder/", "/price-trends", "/search/"]
+        ):
             continue
         if url not in out:
             out.append(url)
@@ -238,13 +243,20 @@ def collect_search_city(
                 logger.info("[%s/%s] No pages to collect", city, prop_type)
                 continue
 
-            logger.info("[%s/%s] Collecting %d search pages", city, prop_type, len(pages_to_collect))
+            logger.info(
+                "[%s/%s] Collecting %d search pages",
+                city,
+                prop_type,
+                len(pages_to_collect),
+            )
 
             for pageno in pages_to_collect:
                 url = add_page_param(base_url, pageno)
 
                 if not guard.is_allowed(url):
-                    logger.warning("[%s/%s] Skipping page %d (robots.txt)", city, prop_type, pageno)
+                    logger.warning(
+                        "[%s/%s] Skipping page %d (robots.txt)", city, prop_type, pageno
+                    )
                     append_jsonl(
                         manifest_path,
                         [
@@ -263,11 +275,18 @@ def collect_search_city(
                     )
                     continue
 
-                logger.info("[%s/%s] Fetching search page %d: %s", city, prop_type, pageno, url)
+                logger.info(
+                    "[%s/%s] Fetching search page %d: %s", city, prop_type, pageno, url
+                )
                 html, _, success = fetch_with_retry(page, url, wait_ms=3000)
 
                 if not success:
-                    logger.error("[%s/%s] Failed to load search page %d after retries", city, prop_type, pageno)
+                    logger.error(
+                        "[%s/%s] Failed to load search page %d after retries",
+                        city,
+                        prop_type,
+                        pageno,
+                    )
                     append_jsonl(
                         manifest_path,
                         [
@@ -286,10 +305,14 @@ def collect_search_city(
                     )
                     continue
 
-                hrefs = page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
+                hrefs = page.eval_on_selector_all(
+                    "a[href]", "els => els.map(e => e.href)"
+                )
                 links = extract_detail_links(hrefs, base_url)
 
-                html_path = pages_search / f"{slugify(city)}_{prop_type}_p{pageno}.html.gz"
+                html_path = (
+                    pages_search / f"{slugify(city)}_{prop_type}_p{pageno}.html.gz"
+                )
                 write_html_gz(html_path, html)
                 pages_collected += 1
 
@@ -342,7 +365,9 @@ def main() -> None:
 
     if args.all_cities:
         cities_to_collect = list(config.keys())
-        logger.info("Collecting %d cities: %s", len(cities_to_collect), cities_to_collect[:5])
+        logger.info(
+            "Collecting %d cities: %s", len(cities_to_collect), cities_to_collect[:5]
+        )
 
         all_summaries = []
         for city_key in cities_to_collect:
@@ -356,7 +381,9 @@ def main() -> None:
 
         total_pages = sum(s["pages_collected"] for s in all_summaries)
         logger.info("=== Collection complete ===")
-        logger.info("Cities: %d, Total search pages: %d", len(all_summaries), total_pages)
+        logger.info(
+            "Cities: %d, Total search pages: %d", len(all_summaries), total_pages
+        )
     else:
         if args.city not in config:
             raise SystemExit(

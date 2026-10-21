@@ -143,7 +143,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-RE_TITLE = re.compile(r"^(\d+(?:\.\d+)?)\s*BHK\s+.+?(Independent House|Villa|Row House)\b", re.I)
+RE_TITLE = re.compile(
+    r"^(\d+(?:\.\d+)?)\s*BHK\s+.+?(Independent House|Villa|Row House)\b", re.I
+)
 
 
 def extract_text_from_html(html: str) -> str:
@@ -175,9 +177,16 @@ def find_locality_line(lines: Sequence[str], title: str | None) -> str | None:
             continue
         if RE_SHOWING.search(cand):
             continue
-        if any(tok in lower for tok in [
-            "emi", "sq.ft", "special highlights", "amenities", "about this property"
-        ]):
+        if any(
+            tok in lower
+            for tok in [
+                "emi",
+                "sq.ft",
+                "special highlights",
+                "amenities",
+                "about this property",
+            ]
+        ):
             continue
         return cand
     return None
@@ -250,7 +259,9 @@ def parse_detail_text(
     amenities = extract_section_housing(lines, "Amenities")
     about_this_property = extract_section_housing(lines, "About this property")
 
-    combined_text = " ".join(filter(None, [title, special_highlights, amenities, about_this_property]))
+    combined_text = " ".join(
+        filter(None, [title, special_highlights, amenities, about_this_property])
+    )
     vaastu_mentioned, vaastu_mentions_text = extract_vaastu_mentions(combined_text)
 
     last_updated = None

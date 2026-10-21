@@ -25,9 +25,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.utils import (
-    extract_vaastu_mentions,
-    extract_sector_from_text,
     extract_city_from_address,
+    extract_sector_from_text,
+    extract_vaastu_mentions,
     normalize_price_to_crore,
 )
 
@@ -82,20 +82,28 @@ def load_campusx_data(root: Path) -> pd.DataFrame:
         if col in combined.columns:
             combined["_vaastu_text"] += " " + combined[col].fillna("").astype(str)
 
-    combined["vaastu_mentioned"] = combined["_vaastu_text"].apply(detect_vaastu).astype(int)
-    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(extract_vaastu_text)
+    combined["vaastu_mentioned"] = (
+        combined["_vaastu_text"].apply(detect_vaastu).astype(int)
+    )
+    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(
+        extract_vaastu_text
+    )
     combined.drop(columns=["_vaastu_text"], inplace=True)
 
     combined["city"] = "gurgaon"
     if "address" in combined.columns:
-        combined["city"] = combined["address"].apply(extract_city_from_address).fillna("gurgaon")
+        combined["city"] = (
+            combined["address"].apply(extract_city_from_address).fillna("gurgaon")
+        )
 
     if "sector" not in combined.columns:
         combined["sector"] = None
     for col in ["address", "society", "nearbyLocations"]:
         if col in combined.columns:
             mask = combined["sector"].isna()
-            combined.loc[mask, "sector"] = combined.loc[mask, col].apply(extract_sector_from_text)
+            combined.loc[mask, "sector"] = combined.loc[mask, col].apply(
+                extract_sector_from_text
+            )
 
     rename_map = {
         "price": "price_crore",
@@ -104,7 +112,10 @@ def load_campusx_data(root: Path) -> pd.DataFrame:
         "bathroom": "bathrooms",
         "balcony": "balconies",
     }
-    combined.rename(columns={k: v for k, v in rename_map.items() if k in combined.columns}, inplace=True)
+    combined.rename(
+        columns={k: v for k, v in rename_map.items() if k in combined.columns},
+        inplace=True,
+    )
 
     return combined
 
@@ -147,8 +158,12 @@ def load_arvanshul_data(root: Path) -> pd.DataFrame:
         if col in combined.columns:
             combined["_vaastu_text"] += " " + combined[col].fillna("").astype(str)
 
-    combined["vaastu_mentioned"] = combined["_vaastu_text"].apply(detect_vaastu).astype(int)
-    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(extract_vaastu_text)
+    combined["vaastu_mentioned"] = (
+        combined["_vaastu_text"].apply(detect_vaastu).astype(int)
+    )
+    combined["vaastu_mentions_text"] = combined["_vaastu_text"].apply(
+        extract_vaastu_text
+    )
     combined.drop(columns=["_vaastu_text"], inplace=True)
 
     rename_map = {
@@ -171,10 +186,15 @@ def load_arvanshul_data(root: Path) -> pd.DataFrame:
         "FEATURES": "features",
         "AMENITIES": "amenities",
     }
-    combined.rename(columns={k: v for k, v in rename_map.items() if k in combined.columns}, inplace=True)
+    combined.rename(
+        columns={k: v for k, v in rename_map.items() if k in combined.columns},
+        inplace=True,
+    )
 
     if "price_crore" in combined.columns:
-        combined["price_crore"] = combined["price_crore"].apply(normalize_price_to_crore)
+        combined["price_crore"] = combined["price_crore"].apply(
+            normalize_price_to_crore
+        )
 
     return combined
 
@@ -261,30 +281,44 @@ def compute_statistics(df: pd.DataFrame) -> dict:
         "vaastu_mention_rate": float(df["vaastu_mentioned"].mean() * 100),
     }
 
-    by_source = df.groupby("source").agg(
-        count=("source", "size"),
-        vaastu_count=("vaastu_mentioned", "sum"),
-        vaastu_rate=("vaastu_mentioned", "mean"),
-    ).round(4)
+    by_source = (
+        df.groupby("source")
+        .agg(
+            count=("source", "size"),
+            vaastu_count=("vaastu_mentioned", "sum"),
+            vaastu_rate=("vaastu_mentioned", "mean"),
+        )
+        .round(4)
+    )
     by_source["vaastu_rate"] = (by_source["vaastu_rate"] * 100).round(2)
     stats["by_source"] = by_source.to_dict("index")
 
-    by_city = df.groupby("city").agg(
-        count=("city", "size"),
-        vaastu_count=("vaastu_mentioned", "sum"),
-        vaastu_rate=("vaastu_mentioned", "mean"),
-    ).round(4)
+    by_city = (
+        df.groupby("city")
+        .agg(
+            count=("city", "size"),
+            vaastu_count=("vaastu_mentioned", "sum"),
+            vaastu_rate=("vaastu_mentioned", "mean"),
+        )
+        .round(4)
+    )
     by_city["vaastu_rate"] = (by_city["vaastu_rate"] * 100).round(2)
     stats["by_city"] = by_city.to_dict("index")
 
     if "property_type" in df.columns:
         df = df.copy()
-        df["property_type_clean"] = df["property_type"].fillna("unknown").astype(str).str.lower()
-        by_type = df.groupby("property_type_clean").agg(
-            count=("property_type_clean", "size"),
-            vaastu_count=("vaastu_mentioned", "sum"),
-            vaastu_rate=("vaastu_mentioned", "mean"),
-        ).round(4)
+        df["property_type_clean"] = (
+            df["property_type"].fillna("unknown").astype(str).str.lower()
+        )
+        by_type = (
+            df.groupby("property_type_clean")
+            .agg(
+                count=("property_type_clean", "size"),
+                vaastu_count=("vaastu_mentioned", "sum"),
+                vaastu_rate=("vaastu_mentioned", "mean"),
+            )
+            .round(4)
+        )
         by_type["vaastu_rate"] = (by_type["vaastu_rate"] * 100).round(2)
         stats["by_property_type"] = by_type.to_dict("index")
 
@@ -337,15 +371,21 @@ def main() -> None:
 
     print("\n=== Summary ===")
     print(f"Total listings: {stats['total_listings']}")
-    print(f"Vaastu mentions: {stats['vaastu_mentioned_count']} ({stats['vaastu_mention_rate']:.1f}%)")
+    print(
+        f"Vaastu mentions: {stats['vaastu_mentioned_count']} ({stats['vaastu_mention_rate']:.1f}%)"
+    )
 
     print("\nBy source:")
     for source, data in stats["by_source"].items():
-        print(f"  {source}: {int(data['count'])} listings, {data['vaastu_rate']:.1f}% vaastu")
+        print(
+            f"  {source}: {int(data['count'])} listings, {data['vaastu_rate']:.1f}% vaastu"
+        )
 
     print("\nBy city:")
     for city, data in stats["by_city"].items():
-        print(f"  {city}: {int(data['count'])} listings, {data['vaastu_rate']:.1f}% vaastu")
+        print(
+            f"  {city}: {int(data['count'])} listings, {data['vaastu_rate']:.1f}% vaastu"
+        )
 
     output_cols = [
         "property_id",

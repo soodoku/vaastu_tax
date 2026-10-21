@@ -164,9 +164,9 @@ websites, collected for research on Vaastu compliance pricing premiums.
 
 | Source | Description | Files | Size |
 |--------|-------------|-------|------|
-| Magicbricks | Property listings from magicbricks.com | {stats.get('magicbricks_html_count', 'N/A')} HTML files | ~{stats.get('magicbricks_html_size_mb', 'N/A')} MB |
-| Housing.com | Property listings from housing.com | {stats.get('housingcom_html_count', 'N/A')} HTML files | ~{stats.get('housingcom_html_size_mb', 'N/A')} MB |
-| 99acres | Property listings from 99acres.com | {stats.get('99acres_file_count', 'N/A')} files | ~{stats.get('99acres_size_mb', 'N/A')} MB |
+| Magicbricks | Property listings from magicbricks.com | {stats.get("magicbricks_html_count", "N/A")} HTML files | ~{stats.get("magicbricks_html_size_mb", "N/A")} MB |
+| Housing.com | Property listings from housing.com | {stats.get("housingcom_html_count", "N/A")} HTML files | ~{stats.get("housingcom_html_size_mb", "N/A")} MB |
+| 99acres | Property listings from 99acres.com | {stats.get("99acres_file_count", "N/A")} files | ~{stats.get("99acres_size_mb", "N/A")} MB |
 
 ## Directory Structure
 
@@ -437,7 +437,9 @@ def main():
     parsed_dir = output_dir / "parsed"
 
     # Magicbricks parquet files
-    mb_parquet_files = sorted((data_raw / "magicbricks").glob("*/parsed_listings.parquet"))
+    mb_parquet_files = sorted(
+        (data_raw / "magicbricks").glob("*/parsed_listings.parquet")
+    )
     print(f"   Found {len(mb_parquet_files)} magicbricks parquet files")
     if mb_parquet_files:
         mb_merged = merge_parquet_files(
@@ -445,7 +447,9 @@ def main():
             parsed_dir / "magicbricks_listings.parquet",
             dry_run=dry_run,
         )
-        print(f"   -> magicbricks_listings.parquet: {mb_merged.get('total_rows', 'N/A')} rows")
+        print(
+            f"   -> magicbricks_listings.parquet: {mb_merged.get('total_rows', 'N/A')} rows"
+        )
 
     # Housing.com CSV files -> parquet
     hc_csv_files = sorted((data_raw / "housingcom").glob("*/parsed_listings.csv"))
@@ -456,7 +460,9 @@ def main():
             parsed_dir / "housingcom_listings.parquet",
             dry_run=dry_run,
         )
-        print(f"   -> housingcom_listings.parquet: {hc_merged.get('total_rows', 'N/A')} rows")
+        print(
+            f"   -> housingcom_listings.parquet: {hc_merged.get('total_rows', 'N/A')} rows"
+        )
 
     # 99acres - check for parsed data
     acres_parquet = list((data_raw / "99acres").glob("*/parsed_listings.parquet"))
@@ -468,7 +474,9 @@ def main():
             parsed_dir / "99acres_listings.parquet",
             dry_run=dry_run,
         )
-        print(f"   -> 99acres_listings.parquet: {acres_merged.get('total_rows', 'N/A')} rows")
+        print(
+            f"   -> 99acres_listings.parquet: {acres_merged.get('total_rows', 'N/A')} rows"
+        )
     elif acres_csv:
         print(f"   Found {len(acres_csv)} 99acres CSV files")
         acres_merged = merge_csv_to_parquet(
@@ -476,7 +484,9 @@ def main():
             parsed_dir / "99acres_listings.parquet",
             dry_run=dry_run,
         )
-        print(f"   -> 99acres_listings.parquet: {acres_merged.get('total_rows', 'N/A')} rows")
+        print(
+            f"   -> 99acres_listings.parquet: {acres_merged.get('total_rows', 'N/A')} rows"
+        )
     else:
         print("   No parsed 99acres data found (raw files only)")
 

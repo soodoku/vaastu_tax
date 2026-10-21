@@ -91,7 +91,10 @@ def extract_detail_links_from_html(html: str, base_url: str) -> list[str]:
         path = parsed.path.lower()
         if "spid-" not in path:
             continue
-        if any(bad in path for bad in ["/projects/", "/builder/", "/price-trends", "/search/"]):
+        if any(
+            bad in path
+            for bad in ["/projects/", "/builder/", "/price-trends", "/search/"]
+        ):
             continue
         if url not in out:
             out.append(url)

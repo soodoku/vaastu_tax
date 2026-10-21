@@ -22,8 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import pandas as pd  # noqa: E402
 from bs4 import BeautifulSoup  # noqa: E402
 
-from scripts.utils import extract_vaastu_mentions  # noqa: E402
-from scripts.utils import load_manifest, project_root, read_html_gz, slugify
+from scripts.utils import (
+    extract_vaastu_mentions,  # noqa: E402
+    load_manifest,
+    project_root,
+    read_html_gz,
+    slugify,
+)
 from scripts.utils.scraping import logger, setup_logging  # noqa: E402
 
 

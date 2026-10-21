@@ -133,7 +133,9 @@ def check_vaastu_text_fields(csv_path: Path) -> tuple[list[str], int, int]:
         for col in matching:
             if col in df.columns:
                 text_data = df[col].astype(str).str.lower()
-                vaastu_matches = text_data.str.contains(r"\bvaa?stu\b", regex=True, na=False)
+                vaastu_matches = text_data.str.contains(
+                    r"\bvaa?stu\b", regex=True, na=False
+                )
                 vaastu_count += vaastu_matches.sum()
 
     return matching, total_rows, vaastu_count
@@ -164,13 +166,17 @@ def validate_dataset(dataset_dir: Path, author: str) -> dict:
         all_text_fields.update(text_fields)
         total_rows += rows
         total_vaastu += vaastu
-        file_info.append({
-            "file": csv_path.name,
-            "rows": int(rows),
-            "text_fields": text_fields,
-            "vaastu_mentions": int(vaastu),
-        })
-        print(f"  {csv_path.name}: {rows} rows, text fields: {text_fields}, vaastu: {vaastu}")
+        file_info.append(
+            {
+                "file": csv_path.name,
+                "rows": int(rows),
+                "text_fields": text_fields,
+                "vaastu_mentions": int(vaastu),
+            }
+        )
+        print(
+            f"  {csv_path.name}: {rows} rows, text fields: {text_fields}, vaastu: {vaastu}"
+        )
 
     has_text_fields = len(all_text_fields) > 0
     has_vaastu_mentions = total_vaastu > 0
@@ -181,7 +187,9 @@ def validate_dataset(dataset_dir: Path, author: str) -> dict:
         "reason": (
             "Has text fields with Vaastu mentions"
             if (has_text_fields and has_vaastu_mentions)
-            else "No Vaastu mentions found" if has_text_fields else "No text fields for Vaastu extraction"
+            else "No Vaastu mentions found"
+            if has_text_fields
+            else "No text fields for Vaastu extraction"
         ),
         "files": file_info,
         "text_fields": list(all_text_fields),
@@ -205,11 +213,13 @@ def main() -> None:
         print(f"\n=== {name} ===")
 
         if not run_kaggle_download(name, output_dir):
-            results.append({
-                "author": author,
-                "valid": False,
-                "reason": "Download failed",
-            })
+            results.append(
+                {
+                    "author": author,
+                    "valid": False,
+                    "reason": "Download failed",
+                }
+            )
             continue
 
         validation = validate_dataset(output_dir, author)
@@ -225,7 +235,9 @@ def main() -> None:
 
     print(f"Valid datasets: {len(valid_datasets)}")
     for r in valid_datasets:
-        print(f"  - {r['author']}: {r['total_rows']} rows, {r['vaastu_mentions']} vaastu mentions")
+        print(
+            f"  - {r['author']}: {r['total_rows']} rows, {r['vaastu_mentions']} vaastu mentions"
+        )
         print(f"    Text fields: {r['text_fields']}")
 
     print(f"\nRemoved datasets: {len(invalid_datasets)}")

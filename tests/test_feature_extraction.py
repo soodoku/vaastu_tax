@@ -6,9 +6,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.utils.feature_extraction import (
-    extract_vaastu_mentions,
-    extract_sector_from_text,
     extract_city_from_address,
+    extract_sector_from_text,
+    extract_vaastu_mentions,
 )
 
 

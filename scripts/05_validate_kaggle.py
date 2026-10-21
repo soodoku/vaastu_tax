@@ -16,8 +16,8 @@ Usage:
 import re
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 KAGGLE_DIR = DATA_DIR / "raw" / "99acres_kaggle" / "arvanshul"
@@ -112,7 +112,9 @@ def validate_data(df: pd.DataFrame) -> dict:
 
     # 2. Vaastu column check
     print("\n## 2. Vaastu Column Check")
-    vaastu_cols = [c for c in df.columns if "vaastu" in c.lower() or "vastu" in c.lower()]
+    vaastu_cols = [
+        c for c in df.columns if "vaastu" in c.lower() or "vastu" in c.lower()
+    ]
     if vaastu_cols:
         print(f"Found vaastu columns: {vaastu_cols}")
     else:
@@ -133,7 +135,7 @@ def validate_data(df: pd.DataFrame) -> dict:
     vaastu_samples = df[df["vaastu_mentioned"] == 1]["vaastu_text"].head(5)
     for i, text in enumerate(vaastu_samples):
         if text:
-            print(f"   {i+1}. ...{text}...")
+            print(f"   {i + 1}. ...{text}...")
 
     # 3. Price validity
     print("\n## 3. Price Analysis")
@@ -146,7 +148,9 @@ def validate_data(df: pd.DataFrame) -> dict:
         # Parse prices
         df["price_crore"] = df["PRICE"].apply(parse_price)
         valid_prices = df["price_crore"].notna()
-        print(f"\nValid parsed prices: {valid_prices.sum():,} ({100*valid_prices.mean():.1f}%)")
+        print(
+            f"\nValid parsed prices: {valid_prices.sum():,} ({100 * valid_prices.mean():.1f}%)"
+        )
 
         if valid_prices.sum() > 0:
             prices = df.loc[valid_prices, "price_crore"]
@@ -171,7 +175,9 @@ def validate_data(df: pd.DataFrame) -> dict:
         if valid_min.sum() > 0:
             min_prices_cr = df.loc[valid_min, "MIN_PRICE"] / 10000000
             print(f"  Valid: {valid_min.sum():,}")
-            print(f"  Range: ₹{min_prices_cr.min():.2f} - ₹{min_prices_cr.max():.2f} Cr")
+            print(
+                f"  Range: ₹{min_prices_cr.min():.2f} - ₹{min_prices_cr.max():.2f} Cr"
+            )
             print(f"  Median: ₹{min_prices_cr.median():.2f} Cr")
 
     # 4. Area analysis
@@ -186,7 +192,7 @@ def validate_data(df: pd.DataFrame) -> dict:
 
         areas = df.loc[valid, col]
         print(f"\n{col}:")
-        print(f"  Valid: {valid.sum():,} ({100*valid.mean():.1f}%)")
+        print(f"  Valid: {valid.sum():,} ({100 * valid.mean():.1f}%)")
         print(f"  Range: {areas.min():.0f} - {areas.max():.0f} sqft")
         print(f"  Median: {areas.median():.0f} sqft")
 
@@ -213,7 +219,7 @@ def validate_data(df: pd.DataFrame) -> dict:
     for col in critical_cols:
         if col in df.columns:
             missing = df[col].isna().sum()
-            print(f"  {col}: {missing:,} ({100*missing/len(df):.1f}%) missing")
+            print(f"  {col}: {missing:,} ({100 * missing / len(df):.1f}%) missing")
 
     # 7. By city comparison
     print("\n## 7. By City Comparison")
@@ -227,7 +233,9 @@ def validate_data(df: pd.DataFrame) -> dict:
         if "price_crore" in city_df.columns:
             valid_prices = city_df["price_crore"].dropna()
             median_price = valid_prices.median() if len(valid_prices) > 0 else np.nan
-            print(f"  {city}: {n:,} listings, {vaastu_n} vaastu ({vaastu_pct:.1f}%), median ₹{median_price:.1f}Cr")
+            print(
+                f"  {city}: {n:,} listings, {vaastu_n} vaastu ({vaastu_pct:.1f}%), median ₹{median_price:.1f}Cr"
+            )
         else:
             print(f"  {city}: {n:,} listings, {vaastu_n} vaastu ({vaastu_pct:.1f}%)")
 
@@ -244,14 +252,18 @@ def print_verdict(results: dict) -> None:
 
     # 1. Low vaastu rate
     if results.get("vaastu_pct", 0) < 10:
-        issues.append(f"LOW VAASTU RATE: {results['vaastu_pct']:.1f}% (vs 12-50% in scraped data)")
+        issues.append(
+            f"LOW VAASTU RATE: {results['vaastu_pct']:.1f}% (vs 12-50% in scraped data)"
+        )
 
     # 2. No dedicated vaastu column
     issues.append("NO VAASTU COLUMN: Must extract from free-text DESCRIPTION field")
 
     # 3. Price issues
     if results.get("price_valid_pct", 0) < 50:
-        issues.append(f"PRICE DATA SPARSE: Only {results.get('price_valid_pct', 0):.0f}% valid prices")
+        issues.append(
+            f"PRICE DATA SPARSE: Only {results.get('price_valid_pct', 0):.0f}% valid prices"
+        )
 
     print("\n### Issues Found:")
     for i, issue in enumerate(issues, 1):

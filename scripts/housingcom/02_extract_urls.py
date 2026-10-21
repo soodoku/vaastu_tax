@@ -91,7 +91,15 @@ def extract_detail_links_from_html(html: str, base_url: str) -> list[str]:
         path = parsed.path.lower()
         if "/in/buy/" not in path:
             continue
-        if any(bad in path for bad in ["/price-trends", "/locality-insights", "/builder/", "/projects/"]):
+        if any(
+            bad in path
+            for bad in [
+                "/price-trends",
+                "/locality-insights",
+                "/builder/",
+                "/projects/",
+            ]
+        ):
             continue
         if not ("/page/" in path or "-for-rs-" in path):
             continue

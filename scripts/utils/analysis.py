@@ -74,12 +74,18 @@ def prepare_regression_data(df: pd.DataFrame) -> pd.DataFrame:
     # Clean facing
     if "facing" in df.columns:
         df["facing_clean"] = df["facing"].fillna("Unknown").astype(str).str.strip()
-        df["facing_clean"] = df["facing_clean"].replace({"": "Unknown", "nan": "Unknown"})
+        df["facing_clean"] = df["facing_clean"].replace(
+            {"": "Unknown", "nan": "Unknown"}
+        )
 
     # Clean furnishing
     if "furnishing" in df.columns:
-        df["furnishing_clean"] = df["furnishing"].fillna("Unknown").astype(str).str.strip()
-        df["furnishing_clean"] = df["furnishing_clean"].replace({"": "Unknown", "nan": "Unknown"})
+        df["furnishing_clean"] = (
+            df["furnishing"].fillna("Unknown").astype(str).str.strip()
+        )
+        df["furnishing_clean"] = df["furnishing_clean"].replace(
+            {"": "Unknown", "nan": "Unknown"}
+        )
 
     return df
 
@@ -107,7 +113,13 @@ def run_hedonic_models(
     if print_output:
         print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
         print(f"Premium: {pct:+.1f}%")
-    results["m1"] = {"coef": coef, "se": se, "pval": pval, "pct": pct, "n": int(m1.nobs)}
+    results["m1"] = {
+        "coef": coef,
+        "se": se,
+        "pval": pval,
+        "pct": pct,
+        "n": int(m1.nobs),
+    }
 
     if print_output:
         print("\n" + "-" * 70)
@@ -121,7 +133,13 @@ def run_hedonic_models(
     if print_output:
         print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
         print(f"Premium: {pct:+.1f}%")
-    results["m2"] = {"coef": coef, "se": se, "pval": pval, "pct": pct, "n": int(m2.nobs)}
+    results["m2"] = {
+        "coef": coef,
+        "se": se,
+        "pval": pval,
+        "pct": pct,
+        "n": int(m2.nobs),
+    }
 
     if print_output:
         print("\n" + "-" * 70)
@@ -135,7 +153,14 @@ def run_hedonic_models(
     if print_output:
         print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
         print(f"Premium: {pct:+.1f}%")
-    results["m3"] = {"coef": coef, "se": se, "pval": pval, "pct": pct, "n": int(m3.nobs), "r2": m3.rsquared}
+    results["m3"] = {
+        "coef": coef,
+        "se": se,
+        "pval": pval,
+        "pct": pct,
+        "n": int(m3.nobs),
+        "r2": m3.rsquared,
+    }
 
     # Model 4: + City FE (if city column exists)
     if city_col and city_col in df.columns and df[city_col].nunique() > 1:
@@ -143,7 +168,9 @@ def run_hedonic_models(
             print("\n" + "-" * 70)
             print(f"Model 4: ln_price ~ vaastu + bhk_cat + ln_area + C({city_col})")
             print("-" * 70)
-        m4 = smf.ols(f"ln_price ~ vaastu + bhk_cat + ln_area + C({city_col})", data=df).fit(cov_type="HC3")
+        m4 = smf.ols(
+            f"ln_price ~ vaastu + bhk_cat + ln_area + C({city_col})", data=df
+        ).fit(cov_type="HC3")
         coef = m4.params["vaastu"]
         se = m4.bse["vaastu"]
         pval = m4.pvalues["vaastu"]
@@ -152,7 +179,14 @@ def run_hedonic_models(
             print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
             print(f"Premium: {pct:+.1f}%")
             print(f"R²: {m4.rsquared:.3f}, N: {m4.nobs:.0f}")
-        results["m4"] = {"coef": coef, "se": se, "pval": pval, "pct": pct, "n": int(m4.nobs), "r2": m4.rsquared}
+        results["m4"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "n": int(m4.nobs),
+            "r2": m4.rsquared,
+        }
 
     # Model 5: + Facing (if available)
     if "facing_clean" in df.columns and df["facing_clean"].nunique() > 1:
@@ -173,12 +207,21 @@ def run_hedonic_models(
             print(f"Vaastu coef: {coef:.4f} (SE: {se:.4f}, p={pval:.4f})")
             print(f"Premium: {pct:+.1f}%")
             print(f"R²: {m5.rsquared:.3f}, N: {m5.nobs:.0f}")
-        results["m5"] = {"coef": coef, "se": se, "pval": pval, "pct": pct, "n": int(m5.nobs), "r2": m5.rsquared}
+        results["m5"] = {
+            "coef": coef,
+            "se": se,
+            "pval": pval,
+            "pct": pct,
+            "n": int(m5.nobs),
+            "r2": m5.rsquared,
+        }
 
     return results
 
 
-def print_data_summary(df: pd.DataFrame, source_name: str, city_col: str | None = "city") -> None:
+def print_data_summary(
+    df: pd.DataFrame, source_name: str, city_col: str | None = "city"
+) -> None:
     """Print summary statistics for a dataset."""
     print("\n" + "=" * 70)
     print(f"{source_name.upper()} DATA SUMMARY")
@@ -189,13 +232,17 @@ def print_data_summary(df: pd.DataFrame, source_name: str, city_col: str | None 
     if city_col and city_col in df.columns:
         print(f"Cities: {df[city_col].nunique()}")
         print("\n## By City")
-        summary = df.groupby(city_col).agg(
-            n=("vaastu", "count"),
-            vaastu_n=("vaastu", "sum"),
-            vaastu_pct=("vaastu", lambda x: 100 * x.mean()),
-            mean_price=("price_crore", "mean"),
-            mean_area=("area_sqft", "mean"),
-        ).round(2)
+        summary = (
+            df.groupby(city_col)
+            .agg(
+                n=("vaastu", "count"),
+                vaastu_n=("vaastu", "sum"),
+                vaastu_pct=("vaastu", lambda x: 100 * x.mean()),
+                mean_price=("price_crore", "mean"),
+                mean_area=("area_sqft", "mean"),
+            )
+            .round(2)
+        )
         summary["vaastu_pct"] = summary["vaastu_pct"].round(1)
         print(summary.to_string())
 

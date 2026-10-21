@@ -91,10 +91,16 @@ def parse_list(s: object) -> List[str]:
     except Exception:
         pass
     text = str(s)
-    return [x.strip().strip("'\"").lower() for x in re.split(r",\s*", text.strip("[]")) if x.strip()]
+    return [
+        x.strip().strip("'\"").lower()
+        for x in re.split(r",\s*", text.strip("[]"))
+        if x.strip()
+    ]
 
 
-def winsorize_series(s: pd.Series, lower_q: float = 0.01, upper_q: float = 0.99) -> pd.Series:
+def winsorize_series(
+    s: pd.Series, lower_q: float = 0.01, upper_q: float = 0.99
+) -> pd.Series:
     lo, hi = s.quantile([lower_q, upper_q])
     return s.clip(lower=lo, upper=hi)
 
@@ -102,7 +108,9 @@ def winsorize_series(s: pd.Series, lower_q: float = 0.01, upper_q: float = 0.99)
 def fit_cluster(formula: str, data: pd.DataFrame, cluster_col: str):
     model = smf.ols(formula, data=data).fit()
     used = model.model.data.row_labels
-    robust = model.get_robustcov_results(cov_type="cluster", groups=data.loc[used, cluster_col])
+    robust = model.get_robustcov_results(
+        cov_type="cluster", groups=data.loc[used, cluster_col]
+    )
     return model, robust
 
 
@@ -152,7 +160,10 @@ def latex_table_from_df(
     else:
         lines.append(table)
     if note:
-        lines += ["\\vspace{0.3em}", f"\\par\\begin{{minipage}}{{0.95\\linewidth}}\\footnotesize {note}\\end{{minipage}}"]
+        lines += [
+            "\\vspace{0.3em}",
+            f"\\par\\begin{{minipage}}{{0.95\\linewidth}}\\footnotesize {note}\\end{{minipage}}",
+        ]
     lines += ["\\end{table}", ""]
     return "\n".join(lines)
 
@@ -174,19 +185,44 @@ def build_legacy_gurugram_dataset(raw_dir: Path) -> pd.DataFrame:
     houses["property_type"] = "house"
     flats["property_type"] = "flat"
 
-    comb = pd.concat([houses, flats], ignore_index=True, sort=False).reset_index().rename(columns={"index": "orig_id"})
+    comb = (
+        pd.concat([houses, flats], ignore_index=True, sort=False)
+        .reset_index()
+        .rename(columns={"index": "orig_id"})
+    )
     comb["vaastu_i"] = (
         comb["features"].fillna("").str.contains("vaastu|vastu", case=False, regex=True)
-        | comb["description"].fillna("").str.contains(r"\bvaastu\b|\bvastu\b", case=False, regex=True)
+        | comb["description"]
+        .fillna("")
+        .str.contains(r"\bvaastu\b|\bvastu\b", case=False, regex=True)
     ).astype(int)
 
-    comb["pooja_room"] = comb["additionalRoom"].fillna("").str.contains("pooja", case=False, regex=False)
-    comb["servant_room"] = comb["additionalRoom"].fillna("").str.contains("servant", case=False, regex=False)
-    comb["store_room"] = comb["additionalRoom"].fillna("").str.contains("store", case=False, regex=False)
-    comb["study_room"] = comb["additionalRoom"].fillna("").str.contains("study", case=False, regex=False)
-    comb["others_room"] = comb["additionalRoom"].fillna("").str.contains("others", case=False, regex=False)
+    comb["pooja_room"] = (
+        comb["additionalRoom"].fillna("").str.contains("pooja", case=False, regex=False)
+    )
+    comb["servant_room"] = (
+        comb["additionalRoom"]
+        .fillna("")
+        .str.contains("servant", case=False, regex=False)
+    )
+    comb["store_room"] = (
+        comb["additionalRoom"].fillna("").str.contains("store", case=False, regex=False)
+    )
+    comb["study_room"] = (
+        comb["additionalRoom"].fillna("").str.contains("study", case=False, regex=False)
+    )
+    comb["others_room"] = (
+        comb["additionalRoom"]
+        .fillna("")
+        .str.contains("others", case=False, regex=False)
+    )
 
-    comb["location"] = comb["property_name"].str.extract(r" in (.*)$", flags=re.I, expand=False).str.lower().str.strip()
+    comb["location"] = (
+        comb["property_name"]
+        .str.extract(r" in (.*)$", flags=re.I, expand=False)
+        .str.lower()
+        .str.strip()
+    )
     comb["location"] = comb["location"].str.replace(r"\s*,?\s*gurgaon$", "", regex=True)
 
     for d in [comb, g2]:
@@ -216,16 +252,32 @@ def build_legacy_gurugram_dataset(raw_dir: Path) -> pd.DataFrame:
         how="left",
     )
 
-    ana["pooja_room2"] = ana["pooja room"].fillna(ana["pooja_room"].astype(int)).astype(int)
-    ana["servant_room2"] = ana["servant room"].fillna(ana["servant_room"].astype(int)).astype(int)
-    ana["store_room2"] = ana["store room"].fillna(ana["store_room"].astype(int)).astype(int)
-    ana["study_room2"] = ana["study room"].fillna(ana["study_room"].astype(int)).astype(int)
-    ana["others_room2"] = ana["others"].fillna(ana["others_room"].astype(int)).astype(int)
+    ana["pooja_room2"] = (
+        ana["pooja room"].fillna(ana["pooja_room"].astype(int)).astype(int)
+    )
+    ana["servant_room2"] = (
+        ana["servant room"].fillna(ana["servant_room"].astype(int)).astype(int)
+    )
+    ana["store_room2"] = (
+        ana["store room"].fillna(ana["store_room"].astype(int)).astype(int)
+    )
+    ana["study_room2"] = (
+        ana["study room"].fillna(ana["study_room"].astype(int)).astype(int)
+    )
+    ana["others_room2"] = (
+        ana["others"].fillna(ana["others_room"].astype(int)).astype(int)
+    )
     ana["sector"] = ana["sector"].fillna(ana["location"])
     ana["furnishing_type"] = ana["furnishing_type"].fillna("missing")
     ana["luxury_score"] = ana["luxury_score"].fillna(ana["luxury_score"].median())
 
-    ana = ana[(ana["price"].notna()) & (ana["area"].notna()) & (ana["price"] > 0) & (ana["area"] > 100) & (ana["sector"].notna())].copy()
+    ana = ana[
+        (ana["price"].notna())
+        & (ana["area"].notna())
+        & (ana["price"] > 0)
+        & (ana["area"] > 100)
+        & (ana["sector"].notna())
+    ].copy()
 
     for col in ["price", "area", "price_per_sqft", "floorNum", "luxury_score"]:
         ana[f"{col}_w"] = winsorize_series(ana[col])
@@ -243,7 +295,9 @@ def build_legacy_gurugram_dataset(raw_dir: Path) -> pd.DataFrame:
     ana["balcony_n"] = ana["balcony_n"].fillna(ana["balcony_n"].median())
     ana["facing"] = ana["facing"].fillna("Missing")
     ana["agePossession"] = ana["agePossession"].fillna("Missing")
-    ana["property_type"] = pd.Categorical(ana["property_type"], categories=["flat", "house"], ordered=True)
+    ana["property_type"] = pd.Categorical(
+        ana["property_type"], categories=["flat", "house"], ordered=True
+    )
     ana["ln_price"] = np.log(ana["price_w"])
     ana["ln_area"] = np.log(ana["area_w"])
     return ana
@@ -269,13 +323,23 @@ def build_collected_housingcom_dataset(input_csv: Path) -> pd.DataFrame:
     out["agePossession"] = out.get("possession_status", "Missing").fillna("Missing")
     out["furnishing_type"] = out.get("furnishing", "missing").fillna("missing")
     out["luxury_score_w"] = 0.0
-    out["pooja_room2"] = out.get("about_this_property", "").fillna("").str.contains("pooja", case=False).astype(int)
+    out["pooja_room2"] = (
+        out.get("about_this_property", "")
+        .fillna("")
+        .str.contains("pooja", case=False)
+        .astype(int)
+    )
     out["servant_room2"] = 0
     out["store_room2"] = 0
     out["study_room2"] = 0
     out["others_room2"] = 0
 
-    out = out[(out["price"].notna()) & (out["area"].notna()) & (out["price"] > 0) & (out["area"] > 100)].copy()
+    out = out[
+        (out["price"].notna())
+        & (out["area"].notna())
+        & (out["price"] > 0)
+        & (out["area"] > 100)
+    ].copy()
     out["price_w"] = winsorize_series(out["price"])
     out["area_w"] = winsorize_series(out["area"])
     out["floorNum_w"] = 0.0
@@ -332,18 +396,24 @@ def run_legacy_models(a: pd.DataFrame) -> pd.DataFrame:
 def run_legacy_matching(a: pd.DataFrame) -> pd.DataFrame:
     m = a.copy()
     loc_agg = m.groupby("sector")["vaastu_i"].agg(["sum", "count"])
-    sectors_both = loc_agg[(loc_agg["sum"] > 0) & (loc_agg["sum"] < loc_agg["count"])].index
+    sectors_both = loc_agg[
+        (loc_agg["sum"] > 0) & (loc_agg["sum"] < loc_agg["count"])
+    ].index
     m = m[m["sector"].isin(sectors_both)].copy()
 
     matches = []
     cols = ["ln_area", "bathroom", "balcony_n", "floorNum_w", "luxury_score_w"]
-    for (sector, property_type), g in m.groupby(["sector", "property_type"], observed=False):
+    for (sector, property_type), g in m.groupby(
+        ["sector", "property_type"], observed=False
+    ):
         treated = g[g["vaastu_i"] == 1]
         control = g[g["vaastu_i"] == 0]
         if len(treated) == 0 or len(control) == 0:
             continue
         for _, row in treated.iterrows():
-            cand = control[control["bedRoom"].between(row["bedRoom"] - 1, row["bedRoom"] + 1)]
+            cand = control[
+                control["bedRoom"].between(row["bedRoom"] - 1, row["bedRoom"] + 1)
+            ]
             if cand.empty:
                 cand = control.copy()
             same_age = cand[cand["agePossession"] == row["agePossession"]]
@@ -441,25 +511,66 @@ def house_sector_support(a: pd.DataFrame) -> pd.DataFrame:
     five_plus = g[g["sum"] >= 5]
     rows = [
         {"statistic": "House listings", "value": int(len(house))},
-        {"statistic": "Vaastu-tagged house listings", "value": int(house["vaastu_i"].sum())},
-        {"statistic": "Non-Vaastu house listings", "value": int((1 - house["vaastu_i"]).sum())},
+        {
+            "statistic": "Vaastu-tagged house listings",
+            "value": int(house["vaastu_i"].sum()),
+        },
+        {
+            "statistic": "Non-Vaastu house listings",
+            "value": int((1 - house["vaastu_i"]).sum()),
+        },
         {"statistic": "Sectors with any house listings", "value": int(g.shape[0])},
-        {"statistic": "Sectors with at least one Vaastu house", "value": int(positive.shape[0])},
-        {"statistic": "Sectors with both Vaastu and non-Vaastu houses", "value": int(both.shape[0])},
-        {"statistic": "Sectors with at least 5 Vaastu houses", "value": int(five_plus.shape[0])},
-        {"statistic": "Median Vaastu-house count among positive sectors", "value": float(positive["sum"].median()) if len(positive) > 0 else float("nan")},
-        {"statistic": "Mean Vaastu-house count among positive sectors", "value": float(positive["sum"].mean()) if len(positive) > 0 else float("nan")},
+        {
+            "statistic": "Sectors with at least one Vaastu house",
+            "value": int(positive.shape[0]),
+        },
+        {
+            "statistic": "Sectors with both Vaastu and non-Vaastu houses",
+            "value": int(both.shape[0]),
+        },
+        {
+            "statistic": "Sectors with at least 5 Vaastu houses",
+            "value": int(five_plus.shape[0]),
+        },
+        {
+            "statistic": "Median Vaastu-house count among positive sectors",
+            "value": float(positive["sum"].median())
+            if len(positive) > 0
+            else float("nan"),
+        },
+        {
+            "statistic": "Mean Vaastu-house count among positive sectors",
+            "value": float(positive["sum"].mean())
+            if len(positive) > 0
+            else float("nan"),
+        },
     ]
     return pd.DataFrame(rows)
 
 
 def sample_counts_by_type(a: pd.DataFrame) -> pd.DataFrame:
-    counts = a.groupby("property_type", observed=False)["vaastu_i"].agg(["sum", "count", "mean"]).reset_index()
-    counts.rename(columns={"sum": "vaastu_listings", "count": "total_listings", "mean": "vaastu_share"}, inplace=True)
+    counts = (
+        a.groupby("property_type", observed=False)["vaastu_i"]
+        .agg(["sum", "count", "mean"])
+        .reset_index()
+    )
+    counts.rename(
+        columns={
+            "sum": "vaastu_listings",
+            "count": "total_listings",
+            "mean": "vaastu_share",
+        },
+        inplace=True,
+    )
     return counts
 
 
-def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, match_df: Optional[pd.DataFrame], support_df: pd.DataFrame) -> Dict[str, str]:
+def build_macros(
+    a: pd.DataFrame,
+    avg_df: pd.DataFrame,
+    match_df: Optional[pd.DataFrame],
+    support_df: pd.DataFrame,
+) -> Dict[str, str]:
     total = int(a.shape[0])
     total_vaastu = int(a["vaastu_i"].sum())
     overall_share = total_vaastu / total if total else float("nan")
@@ -468,20 +579,42 @@ def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, match_df: Optional[pd.Da
         "TotalListings": fmt_int(total),
         "TotalVaastuListings": fmt_int(total_vaastu),
         "TotalVaastuSharePct": price_fraction_to_pct(overall_share),
-        "FlatListings": fmt_int(counts.loc["flat", "total_listings"]) if "flat" in counts.index else "0",
-        "FlatVaastuListings": fmt_int(counts.loc["flat", "vaastu_listings"]) if "flat" in counts.index else "0",
-        "FlatVaastuSharePct": price_fraction_to_pct(counts.loc["flat", "vaastu_share"]) if "flat" in counts.index else "0.0\\%",
-        "HouseListings": fmt_int(counts.loc["house", "total_listings"]) if "house" in counts.index else fmt_int(total),
-        "HouseVaastuListings": fmt_int(counts.loc["house", "vaastu_listings"]) if "house" in counts.index else fmt_int(total_vaastu),
-        "HouseVaastuSharePct": price_fraction_to_pct(counts.loc["house", "vaastu_share"]) if "house" in counts.index else price_fraction_to_pct(overall_share),
+        "FlatListings": fmt_int(counts.loc["flat", "total_listings"])
+        if "flat" in counts.index
+        else "0",
+        "FlatVaastuListings": fmt_int(counts.loc["flat", "vaastu_listings"])
+        if "flat" in counts.index
+        else "0",
+        "FlatVaastuSharePct": price_fraction_to_pct(counts.loc["flat", "vaastu_share"])
+        if "flat" in counts.index
+        else "0.0\\%",
+        "HouseListings": fmt_int(counts.loc["house", "total_listings"])
+        if "house" in counts.index
+        else fmt_int(total),
+        "HouseVaastuListings": fmt_int(counts.loc["house", "vaastu_listings"])
+        if "house" in counts.index
+        else fmt_int(total_vaastu),
+        "HouseVaastuSharePct": price_fraction_to_pct(
+            counts.loc["house", "vaastu_share"]
+        )
+        if "house" in counts.index
+        else price_fraction_to_pct(overall_share),
     }
 
-    preferred = avg_df.loc[avg_df["model"].str.contains("preferred", case=False)].iloc[0]
+    preferred = avg_df.loc[avg_df["model"].str.contains("preferred", case=False)].iloc[
+        0
+    ]
     macros.update(
         {
-            "PreferredAveragePremiumPct": price_fraction_to_pct(preferred["premium_pct"]),
-            "PreferredAverageCILowPct": price_fraction_to_pct(preferred["premium_pct_ci_low"]),
-            "PreferredAverageCIHighPct": price_fraction_to_pct(preferred["premium_pct_ci_high"]),
+            "PreferredAveragePremiumPct": price_fraction_to_pct(
+                preferred["premium_pct"]
+            ),
+            "PreferredAverageCILowPct": price_fraction_to_pct(
+                preferred["premium_pct_ci_low"]
+            ),
+            "PreferredAverageCIHighPct": price_fraction_to_pct(
+                preferred["premium_pct_ci_high"]
+            ),
         }
     )
 
@@ -491,7 +624,9 @@ def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, match_df: Optional[pd.Da
             {
                 "MatchingPremiumPct": price_fraction_to_pct(match["premium_pct"]),
                 "MatchingCILowPct": price_fraction_to_pct(match["premium_pct_ci_low"]),
-                "MatchingCIHighPct": price_fraction_to_pct(match["premium_pct_ci_high"]),
+                "MatchingCIHighPct": price_fraction_to_pct(
+                    match["premium_pct_ci_high"]
+                ),
             }
         )
 
@@ -499,11 +634,21 @@ def build_macros(a: pd.DataFrame, avg_df: pd.DataFrame, match_df: Optional[pd.Da
     macros.update(
         {
             "HouseSectorsTotal": fmt_int(support["Sectors with any house listings"]),
-            "HouseSectorsWithVaastu": fmt_int(support["Sectors with at least one Vaastu house"]),
-            "HouseSectorsWithBoth": fmt_int(support["Sectors with both Vaastu and non-Vaastu houses"]),
-            "HouseSectorsWithFivePlusVaastu": fmt_int(support["Sectors with at least 5 Vaastu houses"]),
-            "HouseMedianVaastuCountPositive": fmt_num(support["Median Vaastu-house count among positive sectors"], 1),
-            "HouseMeanVaastuCountPositive": fmt_num(support["Mean Vaastu-house count among positive sectors"], 1),
+            "HouseSectorsWithVaastu": fmt_int(
+                support["Sectors with at least one Vaastu house"]
+            ),
+            "HouseSectorsWithBoth": fmt_int(
+                support["Sectors with both Vaastu and non-Vaastu houses"]
+            ),
+            "HouseSectorsWithFivePlusVaastu": fmt_int(
+                support["Sectors with at least 5 Vaastu houses"]
+            ),
+            "HouseMedianVaastuCountPositive": fmt_num(
+                support["Median Vaastu-house count among positive sectors"], 1
+            ),
+            "HouseMeanVaastuCountPositive": fmt_num(
+                support["Mean Vaastu-house count among positive sectors"], 1
+            ),
         }
     )
     return macros
@@ -529,7 +674,9 @@ def plot_coefficients(avg_df: pd.DataFrame, out_path: Path) -> None:
         avg_df.loc[avg_df["model"] == "Raw diff", "beta_log_points"].iloc[0],
         avg_df.loc[avg_df["model"] == "+ structural", "beta_log_points"].iloc[0],
         avg_df.loc[avg_df["model"] == "+ quality/room", "beta_log_points"].iloc[0],
-        avg_df.loc[avg_df["model"] == "+ sector FE (preferred average)", "beta_log_points"].iloc[0],
+        avg_df.loc[
+            avg_df["model"] == "+ sector FE (preferred average)", "beta_log_points"
+        ].iloc[0],
     ]
     ses = [
         avg_df.loc[avg_df["model"] == "Raw diff", "se"].iloc[0],
@@ -560,11 +707,17 @@ def export_results_tables(
     ensure_dir(out_tex)
 
     counts_pub = counts_df.copy()
-    counts_pub["property_type"] = counts_pub["property_type"].astype(str).replace({"flat": "Flats", "house": "Houses"})
+    counts_pub["property_type"] = (
+        counts_pub["property_type"]
+        .astype(str)
+        .replace({"flat": "Flats", "house": "Houses"})
+    )
     counts_pub["vaastu_listings"] = counts_pub["vaastu_listings"].map(fmt_int)
     counts_pub["total_listings"] = counts_pub["total_listings"].map(fmt_int)
     counts_pub["vaastu_share"] = counts_pub["vaastu_share"].map(price_fraction_to_pct)
-    counts_pub.columns = pd.Index(["Property type", "Vaastu listings", "Total listings", "Vaastu share"])
+    counts_pub.columns = pd.Index(
+        ["Property type", "Vaastu listings", "Total listings", "Vaastu share"]
+    )
     write_text(
         out_tex / "tab_counts_by_type.tex",
         latex_table_from_df(
@@ -579,13 +732,19 @@ def export_results_tables(
     avg_pub["n"] = avg_pub["n"].map(fmt_int)
     avg_pub["premium_pct"] = avg_pub["premium_pct"].map(price_fraction_to_pct)
     avg_pub["95\\% CI"] = avg_df.apply(
-        lambda r: f"[{price_fraction_to_pct(r['premium_pct_ci_low'])}, {price_fraction_to_pct(r['premium_pct_ci_high'])}]",
+        lambda r: (
+            f"[{price_fraction_to_pct(r['premium_pct_ci_low'])}, {price_fraction_to_pct(r['premium_pct_ci_high'])}]"
+        ),
         axis=1,
     )
     avg_pub["p_value"] = avg_pub["p_value"].map(p_value_str)
     avg_pub["r2"] = avg_pub["r2"].map(lambda x: f"{x:.3f}")
-    avg_pub = pd.DataFrame(avg_pub[["model", "n", "premium_pct", "95\\% CI", "p_value", "r2"]])
-    avg_pub.columns = pd.Index(["Specification", "N", "Premium", "95\\% CI", "p-value", "$R^2$"])
+    avg_pub = pd.DataFrame(
+        avg_pub[["model", "n", "premium_pct", "95\\% CI", "p_value", "r2"]]
+    )
+    avg_pub.columns = pd.Index(
+        ["Specification", "N", "Premium", "95\\% CI", "p-value", "$R^2$"]
+    )
     write_text(
         out_tex / "tab_average_models.tex",
         latex_table_from_df(
@@ -602,12 +761,28 @@ def export_results_tables(
         match_pub["n_treated_matches"] = match_pub["n_treated_matches"].map(fmt_int)
         match_pub["premium_pct"] = match_pub["premium_pct"].map(price_fraction_to_pct)
         match_pub["95\\% CI"] = match_df.apply(
-            lambda r: f"[{price_fraction_to_pct(r['premium_pct_ci_low'])}, {price_fraction_to_pct(r['premium_pct_ci_high'])}]",
+            lambda r: (
+                f"[{price_fraction_to_pct(r['premium_pct_ci_low'])}, {price_fraction_to_pct(r['premium_pct_ci_high'])}]"
+            ),
             axis=1,
         )
-        match_pub["avg_price_diff_cr"] = match_pub["avg_price_diff_cr"].map(lambda x: f"{x:.3f}")
-        match_pub = pd.DataFrame(match_pub[["matching_design", "n_treated_matches", "premium_pct", "95\\% CI", "avg_price_diff_cr"]])
-        match_pub.columns = pd.Index(["Design", "Matches", "Premium", "95\\% CI", "Avg. diff. (Cr)"])
+        match_pub["avg_price_diff_cr"] = match_pub["avg_price_diff_cr"].map(
+            lambda x: f"{x:.3f}"
+        )
+        match_pub = pd.DataFrame(
+            match_pub[
+                [
+                    "matching_design",
+                    "n_treated_matches",
+                    "premium_pct",
+                    "95\\% CI",
+                    "avg_price_diff_cr",
+                ]
+            ]
+        )
+        match_pub.columns = pd.Index(
+            ["Design", "Matches", "Premium", "95\\% CI", "Avg. diff. (Cr)"]
+        )
         write_text(
             out_tex / "tab_matching.tex",
             latex_table_from_df(
@@ -621,7 +796,11 @@ def export_results_tables(
         )
 
     support_pub = support_df.copy()
-    support_pub["value"] = support_pub["value"].map(lambda x: fmt_num(x, 1) if abs(float(x) - round(float(x))) > 1e-9 else fmt_int(x))
+    support_pub["value"] = support_pub["value"].map(
+        lambda x: (
+            fmt_num(x, 1) if abs(float(x) - round(float(x))) > 1e-9 else fmt_int(x)
+        )
+    )
     support_pub.columns = pd.Index(["Statistic", "Value"])
     write_text(
         out_tex / "tab_house_sector_support.tex",
@@ -680,7 +859,11 @@ def main() -> None:
     ensure_dir(derived)
 
     if args.mode == "legacy_gurugram":
-        raw_dir = Path(args.raw_dir) if args.raw_dir else root / "data" / "raw" / "99acres_campusx"
+        raw_dir = (
+            Path(args.raw_dir)
+            if args.raw_dir
+            else root / "data" / "raw" / "99acres_campusx"
+        )
         a = build_legacy_gurugram_dataset(raw_dir)
         save_analysis_sample(a, derived / "vaastu_analysis_sample.csv")
         avg_df = run_legacy_models(a)
@@ -705,7 +888,14 @@ def main() -> None:
         avg_df = run_collected_models(a)
         match_df = None
         counts_df = pd.DataFrame(
-            [{"property_type": "house", "vaastu_listings": int(a["vaastu_i"].sum()), "total_listings": int(a.shape[0]), "vaastu_share": float(a["vaastu_i"].mean())}]
+            [
+                {
+                    "property_type": "house",
+                    "vaastu_listings": int(a["vaastu_i"].sum()),
+                    "total_listings": int(a.shape[0]),
+                    "vaastu_share": float(a["vaastu_i"].mean()),
+                }
+            ]
         )
         support_df = house_sector_support(a)
         macros = build_macros(a, avg_df, match_df, support_df)
@@ -724,11 +914,17 @@ def main() -> None:
         "root": str(root),
         "rows": int(a.shape[0]),
         "generated_files": [
-            str((out_tex / "tab_average_models.tex").relative_to(root)) if (out_tex / "tab_average_models.tex").exists() else None,
-            str((out_fig / "vaastu_coefficients.png").relative_to(root)) if (out_fig / "vaastu_coefficients.png").exists() else None,
+            str((out_tex / "tab_average_models.tex").relative_to(root))
+            if (out_tex / "tab_average_models.tex").exists()
+            else None,
+            str((out_fig / "vaastu_coefficients.png").relative_to(root))
+            if (out_fig / "vaastu_coefficients.png").exists()
+            else None,
         ],
     }
-    write_text(root / "session_info.txt", "\n".join(f"{k}: {v}" for k, v in session.items()))
+    write_text(
+        root / "session_info.txt", "\n".join(f"{k}: {v}" for k, v in session.items())
+    )
     print(f"Analysis complete for mode={args.mode}. Rows={a.shape[0]}")
 
 
